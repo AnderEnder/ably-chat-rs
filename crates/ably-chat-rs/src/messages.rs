@@ -101,6 +101,24 @@ impl Messages {
         }
     }
 
+    /// Soft-deletes a message.
+    ///
+    /// `POST /chat/v4/rooms/{roomName}/messages/{serial}/delete` — a `POST` to a
+    /// `/delete` sub-resource, **not** an HTTP `DELETE`. Produces a new version
+    /// with action `message.delete`; the message remains retrievable with its
+    /// delete action applied. Only retry-safe when an
+    /// [`idempotency_key`](DeleteMessage::idempotency_key) is supplied (ADR-0006).
+    pub fn delete(&self, serial: impl Into<Serial>) -> DeleteMessage {
+        DeleteMessage {
+            client: self.client.clone(),
+            room: self.room.clone(),
+            serial: serial.into(),
+            description: None,
+            metadata: None,
+            idempotency_key: None,
+        }
+    }
+
     /// Queries message history.
     ///
     /// `GET /chat/v4/rooms/{roomName}/messages`, paginated. Retry-safe. Defaults
@@ -298,6 +316,74 @@ impl IntoFuture for UpdateMessage {
                     &message_path(self.room.as_str(), self.serial.as_str(), ""),
                     &query,
                     Some(Value::Object(obj)),
+                    has_idem,
+                )
+                .await?;
+            decode_json(&resp.body)
+        })
+    }
+}
+
+/// Builder for [`Messages::delete`]; `.await` it to soft-delete the message and
+/// receive the resulting [`Message`] (action `message.delete`).
+#[derive(Clone, Debug)]
+pub struct DeleteMessage {
+    client: Client,
+    room: RoomName,
+    serial: Serial,
+    description: Option<String>,
+    metadata: Option<BTreeMap<String, String>>,
+    idempotency_key: Option<String>,
+}
+
+impl DeleteMessage {
+    /// Attaches an optional description of the delete operation.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Attaches optional string metadata describing the delete operation.
+    pub fn metadata(mut self, metadata: BTreeMap<String, String>) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Supplies an idempotency key, making the delete safe to retry (ADR-0006).
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+impl IntoFuture for DeleteMessage {
+    type Output = Result<Message>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut obj = Map::new();
+            if let Some(description) = self.description {
+                obj.insert("description".to_owned(), Value::String(description));
+            }
+            if let Some(metadata) = &self.metadata {
+                obj.insert("metadata".to_owned(), string_map(metadata));
+            }
+            // The request body is optional; omit it entirely when unset.
+            let body = if obj.is_empty() {
+                None
+            } else {
+                Some(Value::Object(obj))
+            };
+            let (query, has_idem) = idempotency(&self.idempotency_key);
+            let resp = self
+                .client
+                .inner
+                .send(
+                    Method::POST,
+                    &message_path(self.room.as_str(), self.serial.as_str(), "/delete"),
+                    &query,
+                    body,
                     has_idem,
                 )
                 .await?;
