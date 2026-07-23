@@ -14,3 +14,6 @@ pub use error::{Error, ErrorInfo, Result};
 
 mod types;
 pub use types::*;
+
+mod config;
+pub use config::*;
