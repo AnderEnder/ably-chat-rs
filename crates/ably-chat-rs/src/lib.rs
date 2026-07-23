@@ -7,7 +7,7 @@
 //! Build a [`Client`] with an [`Auth`] credential, scope it to a room with
 //! [`Client::room`], then chain into [`Messages`], [`Reactions`], or
 //! [`OccupancyHandle`]. Each operation is a builder that terminates in a bare
-//! `.await` (via [`IntoFuture`](std::future::IntoFuture)); every fallible call
+//! `.await` (via [`IntoFuture`]); every fallible call
 //! returns [`Result<T>`]. Handles are cheap to [`Clone`] (`Arc`-backed) and
 //! `Send + Sync`.
 //!
