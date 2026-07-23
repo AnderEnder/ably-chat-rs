@@ -61,7 +61,7 @@ Two-crate workspace ([ADR-0002](adr/0002-workspace-topology.md)):
 - `Client` MUST be cheap to `Clone` (`Arc`-backed) and `Send + Sync`.
 - `Client`'s `Debug` MUST redact credentials.
 - TLS backend selection MUST be via additive Cargo features
-  (`native-tls` default, `rustls` optional).
+  (`rustls` default, `native-tls` optional).
 
 ## 6. Public API surface
 
@@ -156,8 +156,8 @@ state in `Arc`. No global mutable state.
 ## 11. Feature flags & runtime
 
 - All features MUST be additive.
-- TLS: `native-tls` (default) | `rustls`.
-- Datetime: optional `chrono`, `time`.
+- TLS: `rustls` (default) | `native-tls`.
+- Datetime: optional `chrono`.
 - The crate SHOULD be runtime-agnostic (no hard tokio dependency beyond what
   `reqwest` requires); tests MAY use tokio.
 

@@ -14,10 +14,11 @@ The crate publishes as `ably-chat-rs` and imports as `ably_chat`.
 cargo add ably-chat-rs
 ```
 
-By default the `native-tls` TLS backend is used. To use `rustls` instead:
+By default the pure-Rust `rustls` TLS backend is used (no OpenSSL). To use the
+system `native-tls` backend instead:
 
 ```bash
-cargo add ably-chat-rs --no-default-features --features rustls
+cargo add ably-chat-rs --no-default-features --features native-tls
 ```
 
 ## Usage
@@ -75,10 +76,9 @@ All features are additive.
 
 | Feature      | Default | Effect                                                   |
 | ------------ | ------- | -------------------------------------------------------- |
-| `native-tls` | yes     | TLS via the system's native library (OpenSSL/SChannel).  |
-| `rustls`     | no      | TLS via `rustls` (pure Rust). Mutually usable with above.|
+| `rustls`     | yes     | TLS via `rustls` (Rust; aws-lc-rs + platform verifier).  |
+| `native-tls` | no      | TLS via the system's native library (OpenSSL/SChannel).  |
 | `chrono`     | no      | `Timestamp::to_chrono()` conversion to `chrono::DateTime`.|
-| `time`       | no      | Enables the `time` crate integration.                    |
 
 ## Low-level escape hatch: `ably_chat::raw`
 
