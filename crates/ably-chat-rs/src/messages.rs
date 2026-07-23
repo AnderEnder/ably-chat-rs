@@ -78,6 +78,29 @@ impl Messages {
         }
     }
 
+    /// Updates (edits) a message, **fully replacing** its content.
+    ///
+    /// `PUT /chat/v4/rooms/{roomName}/messages/{serial}`. This is a
+    /// **full replace**: the supplied `text` and any
+    /// [`metadata`](UpdateMessage::metadata) /
+    /// [`headers`](UpdateMessage::headers) become the message's entire new
+    /// content. Omitted fields are **reset to empty**, not left unchanged — to
+    /// preserve existing metadata/headers you must resend them. Produces a new
+    /// version with action `message.update`. Only retry-safe when an
+    /// [`idempotency_key`](UpdateMessage::idempotency_key) is supplied (ADR-0006).
+    pub fn update(&self, serial: impl Into<Serial>, text: impl Into<String>) -> UpdateMessage {
+        UpdateMessage {
+            client: self.client.clone(),
+            room: self.room.clone(),
+            serial: serial.into(),
+            text: text.into(),
+            metadata: None,
+            headers: None,
+            description: None,
+            idempotency_key: None,
+        }
+    }
+
     /// Queries message history.
     ///
     /// `GET /chat/v4/rooms/{roomName}/messages`, paginated. Retry-safe. Defaults
@@ -193,6 +216,86 @@ impl IntoFuture for SendMessage {
                 .send(
                     Method::POST,
                     &room_path(self.room.as_str(), "/messages"),
+                    &query,
+                    Some(Value::Object(obj)),
+                    has_idem,
+                )
+                .await?;
+            decode_json(&resp.body)
+        })
+    }
+}
+
+/// Builder for [`Messages::update`]; `.await` it to apply the edit and receive
+/// the updated [`Message`].
+///
+/// Update semantics are **full-replace**: see [`Messages::update`].
+#[derive(Clone, Debug)]
+pub struct UpdateMessage {
+    client: Client,
+    room: RoomName,
+    serial: Serial,
+    text: String,
+    metadata: Option<Metadata>,
+    headers: Option<BTreeMap<String, String>>,
+    description: Option<String>,
+    idempotency_key: Option<String>,
+}
+
+impl UpdateMessage {
+    /// Sets the message's new metadata. Omitting this resets metadata to empty
+    /// (full-replace; see [`Messages::update`]).
+    pub fn metadata(mut self, metadata: Metadata) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Sets the message's new headers. Omitting this resets headers to empty
+    /// (full-replace; see [`Messages::update`]).
+    pub fn headers(mut self, headers: BTreeMap<String, String>) -> Self {
+        self.headers = Some(headers);
+        self
+    }
+
+    /// Attaches an optional description of the update operation.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Supplies an idempotency key, making the update safe to retry (ADR-0006).
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+impl IntoFuture for UpdateMessage {
+    type Output = Result<Message>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut message = Map::new();
+            message.insert("text".to_owned(), Value::String(self.text));
+            if let Some(metadata) = self.metadata {
+                message.insert("metadata".to_owned(), Value::Object(metadata));
+            }
+            if let Some(headers) = &self.headers {
+                message.insert("headers".to_owned(), string_map(headers));
+            }
+            let mut obj = Map::new();
+            obj.insert("message".to_owned(), Value::Object(message));
+            if let Some(description) = self.description {
+                obj.insert("description".to_owned(), Value::String(description));
+            }
+            let (query, has_idem) = idempotency(&self.idempotency_key);
+            let resp = self
+                .client
+                .inner
+                .send(
+                    Method::PUT,
+                    &message_path(self.room.as_str(), self.serial.as_str(), ""),
                     &query,
                     Some(Value::Object(obj)),
                     has_idem,
