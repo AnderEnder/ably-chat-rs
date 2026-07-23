@@ -382,4 +382,11 @@ mod tests {
         assert_eq!(occ.connections, 3);
         assert_eq!(occ.presence_members, 2);
     }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn timestamp_converts_to_chrono() {
+        let t = Timestamp::from(1_700_000_000_000);
+        assert_eq!(t.to_chrono().unwrap().timestamp_millis(), 1_700_000_000_000);
+    }
 }
