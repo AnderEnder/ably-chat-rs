@@ -1,5 +1,10 @@
 # Ably Chat REST API — OpenAPI specification
 
+[![build status](https://github.com/AnderEnder/ably-chat-rs/workflows/Build/badge.svg)](https://github.com/AnderEnder/ably-chat-rs/actions)
+[![release status](https://github.com/AnderEnder/ably-chat-rs/workflows/Release/badge.svg)](https://github.com/AnderEnder/ably-chat-rs/actions)
+[![crates.io](https://img.shields.io/crates/v/ably-chat-rs.svg)](https://crates.io/crates/ably-chat-rs)
+[![docs.rs](https://docs.rs/ably-chat-rs/badge.svg)](https://docs.rs/ably-chat-rs)
+
 An OpenAPI 3.0.3 specification for the [Ably Chat](https://ably.com/docs/chat)
 REST API, plus the Rust SDK generated and hand-built from it. This repo is a
 two-crate Cargo workspace:

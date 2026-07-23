@@ -39,4 +39,6 @@ rustls = ["reqwest/rustls", "ably-chat-openapi/rustls"]
 chrono = ["dep:chrono"]
 
 [package.metadata.docs.rs]
-all-features = true
+# Document the default (rustls) TLS backend + chrono; avoid dragging OpenSSL
+# (native-tls) onto the docs.rs builder via all-features.
+features = ["chrono"]
