@@ -34,3 +34,6 @@ pub use reactions::{ClientReactions, Reactions};
 
 mod occupancy;
 pub use occupancy::{GetOccupancy, OccupancyHandle};
+
+mod pagination;
+pub use pagination::Page;

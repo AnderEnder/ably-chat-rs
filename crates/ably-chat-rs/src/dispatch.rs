@@ -64,6 +64,21 @@ impl crate::client::Inner {
         has_idem: bool,
     ) -> Result<RawResponse> {
         let url = format!("{}{}", self.base, path);
+        self.send_url(method, url, query, body, has_idem).await
+    }
+
+    /// Like [`send`](Self::send) but takes an already-built absolute `url`.
+    ///
+    /// Used to follow RFC 5988 `next` pagination links (ADR-0009), which are
+    /// full URLs rather than base-relative paths.
+    pub(crate) async fn send_url(
+        &self,
+        method: Method,
+        url: String,
+        query: &[(&str, String)],
+        body: Option<serde_json::Value>,
+        has_idem: bool,
+    ) -> Result<RawResponse> {
         let eligible = Self::retry_eligible(&method, has_idem);
         let mut attempt = 0;
         loop {
