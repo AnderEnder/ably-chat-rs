@@ -8,5 +8,5 @@ authors = ["Andrii Radyk <andrii@natter.co>"]
 license = "MIT OR Apache-2.0"
 edition = "2024"
 rust-version = "1.85"
-# TODO: set before publish
-# repository = "https://github.com/<you>/ably-chat-rs"
+repository = "https://github.com/AnderEnder/ably-chat-rs"
+homepage = "https://github.com/AnderEnder/ably-chat-rs"
