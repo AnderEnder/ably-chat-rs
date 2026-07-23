@@ -1,17 +1,37 @@
 //! The messages handle and message read operations (ADR-0010).
 
+use std::collections::BTreeMap;
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 
 use futures::Stream;
 use reqwest::Method;
+use serde_json::{Map, Value};
 
 use crate::client::Client;
 use crate::dispatch::{decode_json, message_path, room_path};
 use crate::error::Result;
 use crate::pagination::{Fetch, Page, run_stream};
 use crate::reactions::Reactions;
-use crate::types::{Direction, Message, RoomName, Serial, Timestamp};
+use crate::types::{Direction, Message, Metadata, RoomName, Serial, Timestamp};
+
+/// Converts a string→string map into a JSON object value (infallible).
+fn string_map(map: &BTreeMap<String, String>) -> Value {
+    Value::Object(
+        map.iter()
+            .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+            .collect(),
+    )
+}
+
+/// Builds the idempotency-key query and the retry-eligibility flag (ADR-0006):
+/// a write is only retry-safe when the caller supplied an idempotency key.
+fn idempotency(key: &Option<String>) -> (Vec<(&'static str, String)>, bool) {
+    match key {
+        Some(k) => (vec![("idempotencyKey", k.clone())], true),
+        None => (Vec::new(), false),
+    }
+}
 
 /// Message operations for a room.
 ///
@@ -30,6 +50,21 @@ impl Messages {
     /// Reaction operations on messages in this room.
     pub fn reactions(&self) -> Reactions {
         Reactions::new(self.client.clone(), self.room.clone())
+    }
+
+    /// Sends a new message to this room.
+    ///
+    /// `POST /chat/v4/rooms/{roomName}/messages`. Only retry-safe when an
+    /// [`idempotency_key`](SendMessage::idempotency_key) is supplied (ADR-0006).
+    pub fn send(&self, text: impl Into<String>) -> SendMessage {
+        SendMessage {
+            client: self.client.clone(),
+            room: self.room.clone(),
+            text: text.into(),
+            metadata: None,
+            headers: None,
+            idempotency_key: None,
+        }
     }
 
     /// Fetches a single message by its serial (latest version).
@@ -98,6 +133,69 @@ impl IntoFuture for GetMessage {
                     &[],
                     None,
                     false,
+                )
+                .await?;
+            decode_json(&resp.body)
+        })
+    }
+}
+
+/// Builder for [`Messages::send`]; `.await` it to publish the message and
+/// receive the created [`Message`].
+#[derive(Clone, Debug)]
+pub struct SendMessage {
+    client: Client,
+    room: RoomName,
+    text: String,
+    metadata: Option<Metadata>,
+    headers: Option<BTreeMap<String, String>>,
+    idempotency_key: Option<String>,
+}
+
+impl SendMessage {
+    /// Attaches opaque user-defined metadata to the message.
+    pub fn metadata(mut self, metadata: Metadata) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Attaches user-defined string headers to the message.
+    pub fn headers(mut self, headers: BTreeMap<String, String>) -> Self {
+        self.headers = Some(headers);
+        self
+    }
+
+    /// Supplies an idempotency key, making the send safe to retry (ADR-0006).
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+impl IntoFuture for SendMessage {
+    type Output = Result<Message>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut obj = Map::new();
+            obj.insert("text".to_owned(), Value::String(self.text));
+            if let Some(metadata) = self.metadata {
+                obj.insert("metadata".to_owned(), Value::Object(metadata));
+            }
+            if let Some(headers) = &self.headers {
+                obj.insert("headers".to_owned(), string_map(headers));
+            }
+            let (query, has_idem) = idempotency(&self.idempotency_key);
+            let resp = self
+                .client
+                .inner
+                .send(
+                    Method::POST,
+                    &room_path(self.room.as_str(), "/messages"),
+                    &query,
+                    Some(Value::Object(obj)),
+                    has_idem,
                 )
                 .await?;
             decode_json(&resp.body)
