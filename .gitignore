@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Rust / Cargo build output (any crate, incl. nested)
+**/target/
+**/*.rs.bk
+# Library crate: lockfile is not committed
+/Cargo.lock
+
+# Editor / tooling
+.idea/
+*.swp

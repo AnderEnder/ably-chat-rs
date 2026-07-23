@@ -1,0 +1,43 @@
+# Release pipeline — adapted from work/sendgrid's release.yml.
+#
+# This is a LIBRARY workspace, so — unlike the sendgrid reference — there are NO
+# binary artifacts: no cross-compiled tarballs, no musl Docker builds, no per-OS
+# jobs, no GitHub Release upload. Releasing simply publishes the crates to
+# crates.io. (Per project constraint we build only on Linux + macOS natively;
+# publishing is a source upload and runs once on ubuntu.)
+#
+# Fires on a SemVer tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
+#
+# Prerequisites / gotchas:
+#   - `cargo publish` ships the version in Cargo.toml, NOT the tag. Bump
+#     `version` in [workspace.package] (and run `cargo build` to refresh
+#     Cargo.lock) BEFORE tagging, or you republish the old version.
+#   - Requires repo secret `CARGO_TOKEN` (crates.io API token).
+#   - `cargo publish --workspace` publishes in dependency order:
+#     `ably-chat-rs-openapi` first, then `ably-chat-rs`.
+#   - No `|| true`: a re-tag of an already-published version SHOULD fail loudly.
+#     Bump the version before tagging again.
+
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Publish workspace to crates.io
+        run: cargo publish --workspace --token ${{ secrets.CARGO_TOKEN }}
