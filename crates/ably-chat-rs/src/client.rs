@@ -38,8 +38,13 @@ impl Client {
         ClientBuilder::new(auth)
     }
 
-    // TODO(Task 8, Phase 2): `pub fn room(&self, name: impl Into<RoomName>) -> Room`
-    // once the room-scoped handle chain lands.
+    /// Returns a handle to the named chat room.
+    ///
+    /// Rooms are implicit: this neither creates nor deletes anything
+    /// server-side.
+    pub fn room(&self, name: impl Into<crate::types::RoomName>) -> crate::room::Room {
+        crate::room::Room::new(self.clone(), name.into())
+    }
 }
 
 /// Builder for [`Client`]. Requires credentials; host, timeout, retry budget,

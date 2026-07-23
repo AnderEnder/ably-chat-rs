@@ -22,3 +22,15 @@ mod client;
 pub use client::{Client, ClientBuilder};
 
 mod dispatch;
+
+mod room;
+pub use room::Room;
+
+mod messages;
+pub use messages::Messages;
+
+mod reactions;
+pub use reactions::Reactions;
+
+mod occupancy;
+pub use occupancy::OccupancyHandle;
