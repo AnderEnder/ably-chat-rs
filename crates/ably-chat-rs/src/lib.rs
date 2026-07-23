@@ -33,4 +33,4 @@ mod reactions;
 pub use reactions::Reactions;
 
 mod occupancy;
-pub use occupancy::OccupancyHandle;
+pub use occupancy::{GetOccupancy, OccupancyHandle};
