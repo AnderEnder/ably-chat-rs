@@ -32,7 +32,7 @@ pub use messages::{
 };
 
 mod reactions;
-pub use reactions::{ClientReactions, Reactions};
+pub use reactions::{ClientReactions, Reactions, SendReaction};
 
 mod occupancy;
 pub use occupancy::{GetOccupancy, OccupancyHandle};
