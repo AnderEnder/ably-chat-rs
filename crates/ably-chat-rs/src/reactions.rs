@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 
 use crate::client::Client;
 use crate::dispatch::{decode_json, message_path};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::types::{ReactionSummary, ReactionType, RoomName, Serial};
 
 /// Reaction operations on messages in a room.
@@ -40,6 +40,26 @@ impl Reactions {
             name: name.into(),
             kind: ReactionType::Distinct,
             count: None,
+        }
+    }
+
+    /// Removes a reaction from a message.
+    ///
+    /// `DELETE /chat/v4/rooms/{roomName}/messages/{serial}/reactions`. The
+    /// reaction [`kind`](DeleteReaction::kind) defaults to
+    /// [`ReactionType::Distinct`]. A [`name`](DeleteReaction::name) is required
+    /// for `distinct` and `multiple` reactions and optional for `unique`; the
+    /// missing-name case is rejected client-side with [`Error::InvalidRequest`]
+    /// before any request is sent. Retry-safe (`DELETE` is idempotent, ADR-0006).
+    ///
+    /// [`Error::InvalidRequest`]: crate::Error::InvalidRequest
+    pub fn delete(&self, serial: impl Into<Serial>) -> DeleteReaction {
+        DeleteReaction {
+            client: self.client.clone(),
+            room: self.room.clone(),
+            serial: serial.into(),
+            kind: ReactionType::Distinct,
+            name: None,
         }
     }
 
@@ -107,6 +127,69 @@ impl IntoFuture for SendReaction {
                     Some(Value::Object(obj)),
                     // Never retried (ADR-0006): no idempotency key and `multiple`
                     // reactions count each call.
+                    false,
+                )
+                .await?;
+            Ok(())
+        })
+    }
+}
+
+/// Builder for [`Reactions::delete`]; `.await` it to remove the reaction.
+/// Resolves to `()` on success (the endpoint returns `204` with no body).
+#[derive(Clone, Debug)]
+pub struct DeleteReaction {
+    client: Client,
+    room: RoomName,
+    serial: Serial,
+    kind: ReactionType,
+    name: Option<String>,
+}
+
+impl DeleteReaction {
+    /// Sets the reaction aggregation model. Defaults to [`ReactionType::Distinct`].
+    pub fn kind(mut self, kind: ReactionType) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Sets the reaction name (e.g. the emoji) to remove. Required for `distinct`
+    /// and `multiple` reactions.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+}
+
+impl IntoFuture for DeleteReaction {
+    type Output = Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            // `name` is required for `distinct`/`multiple`; enforce before any
+            // request is sent (permissive for unknown `Other` kinds; ADR-0007).
+            let name_required = matches!(
+                self.kind,
+                ReactionType::Distinct | ReactionType::Multiple
+            );
+            if name_required && self.name.is_none() {
+                return Err(Error::InvalidRequest(format!(
+                    "reaction name is required to delete a `{}` reaction",
+                    String::from(self.kind)
+                )));
+            }
+            let mut query: Vec<(&str, String)> = vec![("type", self.kind.into())];
+            if let Some(name) = self.name {
+                query.push(("name", name));
+            }
+            self.client
+                .inner
+                .send(
+                    Method::DELETE,
+                    &message_path(self.room.as_str(), self.serial.as_str(), "/reactions"),
+                    &query,
+                    None,
                     false,
                 )
                 .await?;
