@@ -34,6 +34,10 @@ pub enum Error {
     /// The response body could not be decoded into the expected type.
     #[error("failed to decode response: {0}")]
     Decode(String),
+    /// A request was rejected by client-side validation before being sent
+    /// (e.g. a `distinct`/`multiple` reaction delete missing its `name`).
+    #[error("invalid request: {0}")]
+    InvalidRequest(String),
     /// A non-2xx response carrying the Ably error envelope.
     #[error("Ably API error {}: {message}", .info.code, message = .info.message)]
     Api {
@@ -70,7 +74,7 @@ impl Error {
         match self {
             Error::Api { status, .. } => Some(*status),
             Error::Transport(e) => e.status().map(|s| s.as_u16()),
-            Error::Decode(_) => None,
+            Error::Decode(_) | Error::InvalidRequest(_) => None,
         }
     }
 
@@ -91,7 +95,7 @@ impl Error {
         match self {
             Error::Transport(e) => e.is_timeout() || e.is_connect(),
             Error::Api { status, .. } => *status == 429 || (500..=599).contains(status),
-            Error::Decode(_) => false,
+            Error::Decode(_) | Error::InvalidRequest(_) => false,
         }
     }
 
