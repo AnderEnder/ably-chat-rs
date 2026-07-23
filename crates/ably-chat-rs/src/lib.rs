@@ -17,3 +17,8 @@ pub use types::*;
 
 mod config;
 pub use config::*;
+
+mod client;
+pub use client::{Client, ClientBuilder};
+
+mod dispatch;
