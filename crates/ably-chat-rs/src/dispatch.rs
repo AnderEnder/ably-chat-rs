@@ -18,6 +18,31 @@ pub(crate) struct RawResponse {
     pub body: bytes::Bytes,
 }
 
+/// Decodes a JSON response body into `T`, mapping any deserialization failure
+/// to [`Error::Decode`]. Shared by every operation that returns a typed value.
+pub(crate) fn decode_json<T: serde::de::DeserializeOwned>(body: &[u8]) -> Result<T> {
+    serde_json::from_slice(body).map_err(|e| Error::Decode(e.to_string()))
+}
+
+/// Builds a room-scoped request path with the room name URL-encoded.
+///
+/// `suffix` is appended verbatim after `/chat/v4/rooms/{room}` (e.g.
+/// `"/occupancy"` or `"/messages"`).
+pub(crate) fn room_path(room: &str, suffix: &str) -> String {
+    format!("/chat/v4/rooms/{}{}", urlencoding::encode(room), suffix)
+}
+
+/// Builds a message-scoped request path with the room name and serial
+/// URL-encoded. `suffix` is appended after `.../messages/{serial}`.
+pub(crate) fn message_path(room: &str, serial: &str, suffix: &str) -> String {
+    format!(
+        "/chat/v4/rooms/{}/messages/{}{}",
+        urlencoding::encode(room),
+        urlencoding::encode(serial),
+        suffix
+    )
+}
+
 impl crate::client::Inner {
     /// A request is retry-eligible only if it is inherently idempotent
     /// (`GET`/`DELETE`) or carries an idempotency key (ADR-0006).
