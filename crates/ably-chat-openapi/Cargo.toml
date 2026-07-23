@@ -1,5 +1,5 @@
 [package]
-name = "ably-chat-rs-openapi"
+name = "ably-chat-openapi"
 description = "Unofficial generated OpenAPI bindings for the Ably Chat REST API (v4). Not affiliated with or endorsed by Ably. Prefer the `ably-chat-rs` crate."
 readme = "README.md"
 keywords = ["ably", "chat", "rest", "openapi"]
@@ -39,6 +39,7 @@ all-features = true
 # hand-written `Default` impls), which would fail the workspace `-D warnings`
 # gate. Silence exactly those known style lints here (in Cargo.toml, which is
 # NOT regenerated) rather than touching the generated sources.
+# Generated code is never hand-edited and must not fail the workspace clippy gate;
+# blanket-allow so a newer clippy can't surface new lints and break `-D warnings`.
 [lints.clippy]
-needless_return = "allow"
-derivable_impls = "allow"
+all = { level = "allow", priority = -1 }

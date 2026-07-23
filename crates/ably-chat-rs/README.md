@@ -82,7 +82,7 @@ All features are additive.
 
 ## Low-level escape hatch: `ably_chat::raw`
 
-The generated OpenAPI bindings (`ably-chat-rs-openapi`) are re-exported as
+The generated OpenAPI bindings (`ably-chat-openapi`) are re-exported as
 `ably_chat::raw`. Drop down to them when the ergonomic layer has a gap. This
 module is **not** covered by the pre-1.0 stability guarantee and may change on
 regeneration.

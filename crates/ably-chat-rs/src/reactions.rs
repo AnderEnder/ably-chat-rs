@@ -169,10 +169,8 @@ impl IntoFuture for DeleteReaction {
         Box::pin(async move {
             // `name` is required for `distinct`/`multiple`; enforce before any
             // request is sent (permissive for unknown `Other` kinds; ADR-0007).
-            let name_required = matches!(
-                self.kind,
-                ReactionType::Distinct | ReactionType::Multiple
-            );
+            let name_required =
+                matches!(self.kind, ReactionType::Distinct | ReactionType::Multiple);
             if name_required && self.name.is_none() {
                 return Err(Error::InvalidRequest(format!(
                     "reaction name is required to delete a `{}` reaction",
@@ -232,7 +230,11 @@ impl IntoFuture for ClientReactions {
                 .inner
                 .send(
                     Method::GET,
-                    &message_path(self.room.as_str(), self.serial.as_str(), "/client-reactions"),
+                    &message_path(
+                        self.room.as_str(),
+                        self.serial.as_str(),
+                        "/client-reactions",
+                    ),
                     &query,
                     None,
                     false,

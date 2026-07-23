@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Build the hand-written ergonomic `ably_chat` client as a workspace crate layered over the generated `ably-chat-rs-openapi` bindings.
+**Goal:** Build the hand-written ergonomic `ably_chat` client as a workspace crate layered over the generated `ably-chat-openapi` bindings.
 
 **Architecture:** A two-crate Cargo workspace (ADR-0002). The ergonomic crate owns one async `reqwest` dispatch layer and its own forward-compatible domain types (ADR-0003), because the generated functions discard the `Link` headers pagination needs and the generated `MessageAction` enum hard-fails on unknown values. The generated crate is re-exported as `ably_chat::raw` (ADR-0004). Public surface is a room-scoped handle chain with `IntoFuture` builders (ADR-0010); history/versions paginate via `Page<T>` + `Stream` over RFC 5988 `Link` headers (ADR-0009); one typed `Error` carries the Ably envelope (ADR-0008).
 
@@ -16,7 +16,7 @@
 - TDD strictly: failing test → run-fail → minimal impl → run-pass → commit.
 - Run tests from the workspace root; scope with `-p ably-chat-rs`.
 - Commit after every green step. Use Conventional Commits.
-- Do not edit anything under `crates/ably-chat-rs-openapi/src/` by hand (it is generated).
+- Do not edit anything under `crates/ably-chat-openapi/src/` by hand (it is generated).
 
 ---
 
@@ -28,8 +28,8 @@ Not TDD (structural). Gate: `cargo check --workspace` is green and `ably_chat::r
 
 **Files:**
 - Create: `Cargo.toml` (workspace root, replacing the current package manifest)
-- Move: `src/` → `crates/ably-chat-rs-openapi/src/`
-- Create: `crates/ably-chat-rs-openapi/Cargo.toml`
+- Move: `src/` → `crates/ably-chat-openapi/src/`
+- Create: `crates/ably-chat-openapi/Cargo.toml`
 - Move: `LICENSE-APACHE`, `LICENSE-MIT` copies into each crate
 - Create: `crates/ably-chat-rs/Cargo.toml`, `crates/ably-chat-rs/src/lib.rs`
 
@@ -37,11 +37,11 @@ Not TDD (structural). Gate: `cargo check --workspace` is green and `ably_chat::r
 
 ```bash
 cd /Users/andrii/work/ably-chat-api
-mkdir -p crates/ably-chat-rs-openapi crates/ably-chat-rs/src
-git mv src crates/ably-chat-rs-openapi/src 2>/dev/null || mv src crates/ably-chat-rs-openapi/src
-mv .openapi-generator crates/ably-chat-rs-openapi/.openapi-generator
-mv .openapi-generator-ignore crates/ably-chat-rs-openapi/.openapi-generator-ignore
-cp LICENSE-APACHE LICENSE-MIT crates/ably-chat-rs-openapi/
+mkdir -p crates/ably-chat-openapi crates/ably-chat-rs/src
+git mv src crates/ably-chat-openapi/src 2>/dev/null || mv src crates/ably-chat-openapi/src
+mv .openapi-generator crates/ably-chat-openapi/.openapi-generator
+mv .openapi-generator-ignore crates/ably-chat-openapi/.openapi-generator-ignore
+cp LICENSE-APACHE LICENSE-MIT crates/ably-chat-openapi/
 cp LICENSE-APACHE LICENSE-MIT crates/ably-chat-rs/
 ```
 
@@ -52,7 +52,7 @@ Replace the entire current root `Cargo.toml` with:
 ```toml
 [workspace]
 resolver = "2"
-members = ["crates/ably-chat-rs", "crates/ably-chat-rs-openapi"]
+members = ["crates/ably-chat-rs", "crates/ably-chat-openapi"]
 
 [workspace.package]
 version = "0.1.0"
@@ -64,11 +64,11 @@ rust-version = "1.85"
 # repository = "https://github.com/<you>/ably-chat-rs"
 ```
 
-**Step 3: Write `crates/ably-chat-rs-openapi/Cargo.toml`** (rename the generated crate)
+**Step 3: Write `crates/ably-chat-openapi/Cargo.toml`** (rename the generated crate)
 
 ```toml
 [package]
-name = "ably-chat-rs-openapi"
+name = "ably-chat-openapi"
 description = "Unofficial generated OpenAPI bindings for the Ably Chat REST API (v4). Not affiliated with or endorsed by Ably. Prefer the `ably-chat-rs` crate."
 readme = "README.md"
 keywords = ["ably", "chat", "rest", "openapi"]
@@ -115,7 +115,7 @@ rust-version.workspace = true
 name = "ably_chat"
 
 [dependencies]
-ably-chat-rs-openapi = { version = "0.1.0", path = "../ably-chat-rs-openapi" }
+ably-chat-openapi = { version = "0.1.0", path = "../ably-chat-openapi" }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -131,8 +131,8 @@ wiremock = "0.6"
 
 [features]
 default = ["native-tls"]
-native-tls = ["reqwest/native-tls", "ably-chat-rs-openapi/native-tls"]
-rustls = ["reqwest/rustls", "ably-chat-rs-openapi/rustls"]
+native-tls = ["reqwest/native-tls", "ably-chat-openapi/native-tls"]
+rustls = ["reqwest/rustls", "ably-chat-openapi/rustls"]
 chrono = ["dep:chrono"]
 time = ["dep:time"]
 
@@ -172,7 +172,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 **Step 6: Verify the workspace compiles**
 
 Run: `cargo check --workspace`
-Expected: PASS — both `ably-chat-rs-openapi` and `ably-chat-rs` compile.
+Expected: PASS — both `ably-chat-openapi` and `ably-chat-rs` compile.
 
 **Step 7: Commit**
 
@@ -201,8 +201,8 @@ clean at plan-authoring time)
 ```bash
 npx --yes @openapitools/openapi-generator-cli generate \
   -i openapi/ably-chat-rest.yaml -g rust -o /tmp/gen \
-  --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
-diff -ru crates/ably-chat-rs-openapi/src /tmp/gen/src
+  --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+diff -ru crates/ably-chat-openapi/src /tmp/gen/src
 ```
 Expected: no output (clean). `src/` is `packageName`-independent, so the Task 1
 *move* is sufficient — no regeneration needed.
@@ -790,12 +790,12 @@ Run: `cargo test -p ably-chat-rs --doc` → PASS. Run: `cargo clippy -p ably-cha
 - **Confirm the SPEC §3 open question** against a live endpoint (bare object vs 1-element array) and record the result in the README caveat; adjust deserialization only if it is an array.
 - Verify packaging without publishing (a full `cargo publish --dry-run` of
   `ably-chat-rs` cannot resolve its unpublished path-dep until
-  `ably-chat-rs-openapi` is on crates.io — chicken-and-egg):
-  - `cargo publish -p ably-chat-rs-openapi --dry-run` (this one can dry-run)
+  `ably-chat-openapi` is on crates.io — chicken-and-egg):
+  - `cargo publish -p ably-chat-openapi --dry-run` (this one can dry-run)
   - `cargo package -p ably-chat-rs --allow-dirty` (packages + build-verifies via the path dep)
 - Set `repository`/`homepage` in the workspace manifest.
 - The real release is **tag-triggered**: `release.yml` runs `cargo publish
-  --workspace` on a `v*.*.*` tag (publishes `ably-chat-rs-openapi` then
+  --workspace` on a `v*.*.*` tag (publishes `ably-chat-openapi` then
   `ably-chat-rs`; needs `CARGO_TOKEN`). Bump `[workspace.package] version`
   before tagging.
 

@@ -108,13 +108,11 @@ async fn versions_returns_a_page() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/chat/v4/rooms/r/messages/msg-1/versions"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_string(format!(
-                "[{},{}]",
-                message_json("msg-1"),
-                message_json("msg-1")
-            )),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_string(format!(
+            "[{},{}]",
+            message_json("msg-1"),
+            message_json("msg-1")
+        )))
         .expect(1)
         .mount(&server)
         .await;
@@ -122,12 +120,7 @@ async fn versions_returns_a_page() {
     let client = Client::builder(Auth::api_key("k:s"))
         .host(server.uri())
         .build();
-    let page = client
-        .room("r")
-        .messages()
-        .versions("msg-1")
-        .await
-        .unwrap();
+    let page = client.room("r").messages().versions("msg-1").await.unwrap();
     assert_eq!(page.items().len(), 2);
     assert!(!page.has_next());
 }

@@ -143,7 +143,10 @@ mod tests {
 
     #[test]
     fn path_helpers_url_encode_segments() {
-        assert_eq!(room_path("my room", "/occupancy"), "/chat/v4/rooms/my%20room/occupancy");
+        assert_eq!(
+            room_path("my room", "/occupancy"),
+            "/chat/v4/rooms/my%20room/occupancy"
+        );
         // Serials carry `@` and `:`, which MUST be percent-encoded in the path.
         assert_eq!(
             message_path("r", "01ts-001@abc:001", "/versions"),
@@ -168,9 +171,10 @@ mod tests {
             .and(path("/chat/v4/rooms/r/occupancy"))
             .and(header("x-ably-version", "4"))
             .and(header("authorization", "Basic YXBwLms6cw=="))
-            .respond_with(ResponseTemplate::new(404).set_body_string(
-                r#"{"error":{"code":40400,"message":"no","statusCode":404}}"#,
-            ))
+            .respond_with(
+                ResponseTemplate::new(404)
+                    .set_body_string(r#"{"error":{"code":40400,"message":"no","statusCode":404}}"#),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -180,13 +184,7 @@ mod tests {
             .build();
         let err = client
             .inner
-            .send(
-                Method::GET,
-                "/chat/v4/rooms/r/occupancy",
-                &[],
-                None,
-                false,
-            )
+            .send(Method::GET, "/chat/v4/rooms/r/occupancy", &[], None, false)
             .await
             .unwrap_err();
         assert!(err.is_not_found());
@@ -210,13 +208,7 @@ mod tests {
             .build();
         let r = client
             .inner
-            .send(
-                Method::GET,
-                "/chat/v4/rooms/r/occupancy",
-                &[],
-                None,
-                false,
-            )
+            .send(Method::GET, "/chat/v4/rooms/r/occupancy", &[], None, false)
             .await
             .unwrap();
         assert_eq!(r.status, 200);

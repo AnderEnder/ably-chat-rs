@@ -36,12 +36,7 @@ async fn send_posts_text_body_and_returns_created_message() {
     let client = Client::builder(Auth::api_key("app.k:s"))
         .host(server.uri())
         .build();
-    let msg = client
-        .room("my-room")
-        .messages()
-        .send("hi")
-        .await
-        .unwrap();
+    let msg = client.room("my-room").messages().send("hi").await.unwrap();
     assert_eq!(msg.text, "hi");
     assert_eq!(msg.action, MessageAction::Create);
 }

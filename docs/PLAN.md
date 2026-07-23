@@ -16,16 +16,16 @@ workspace.
 Implements [ADR-0002](adr/0002-workspace-topology.md), [ADR-0011](adr/0011-packaging.md).
 
 - Create the workspace root `Cargo.toml` (`[workspace] members = ["crates/*"]`).
-- Move the generated crate to `crates/ably-chat-rs-openapi/` (its `Cargo.toml`,
-  `src/apis`, `src/models`, generated `lib.rs`); keep its name `ably-chat-rs-openapi`
+- Move the generated crate to `crates/ably-chat-openapi/` (its `Cargo.toml`,
+  `src/apis`, `src/models`, generated `lib.rs`); keep its name `ably-chat-openapi`
   (import `ably_chat_openapi`), unofficial description, dual licence.
 - Create `crates/ably-chat-rs/` skeleton: `Cargo.toml` (name `ably-chat-rs`,
   `[lib] name = "ably_chat"`, edition 2024, MSRV 1.85, dual licence), depending on
-  `ably-chat-rs-openapi`; `src/lib.rs` with `pub mod raw` re-exporting the
+  `ably-chat-openapi`; `src/lib.rs` with `pub mod raw` re-exporting the
   generated crate and empty module declarations.
 - Move `LICENSE-*` into each crate; keep root copies.
 - Set up `.openapi-generator-ignore` / regeneration command targeting
-  `crates/ably-chat-rs-openapi` (`-o crates/ably-chat-rs-openapi`).
+  `crates/ably-chat-openapi` (`-o crates/ably-chat-openapi`).
 
 **Gate:** `cargo check --workspace` passes; `ably_chat::raw` resolves.
 
@@ -97,7 +97,7 @@ Implements ADR-0011.
 - Confirm all feature combinations build (`--no-default-features`,
   `--features rustls,chrono,time`).
 - Confirm the SPEC §3 singleton-body assumption against a live endpoint.
-- `cargo publish --dry-run` for `ably-chat-rs-openapi` then `ably-chat-rs`; set
+- `cargo publish --dry-run` for `ably-chat-openapi` then `ably-chat-rs`; set
   `repository`/`homepage`.
 
 **Gate:** both dry-runs succeed; docs build; live singleton-body check recorded.

@@ -17,7 +17,7 @@ homepage.workspace = true
 name = "ably_chat"
 
 [dependencies]
-ably-chat-rs-openapi = { version = "0.1.0", path = "../ably-chat-rs-openapi" }
+ably-chat-openapi = { version = "0.1.0", path = "../ably-chat-openapi" }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,7 +27,6 @@ base64 = "0.22"
 bytes = "1"
 urlencoding = "2"
 chrono = { version = "0.4", optional = true, default-features = false, features = ["std"] }
-time = { version = "0.3", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -35,10 +34,9 @@ wiremock = "0.6"
 
 [features]
 default = ["native-tls"]
-native-tls = ["reqwest/native-tls", "ably-chat-rs-openapi/native-tls"]
-rustls = ["reqwest/rustls", "ably-chat-rs-openapi/rustls"]
+native-tls = ["reqwest/native-tls", "ably-chat-openapi/native-tls"]
+rustls = ["reqwest/rustls", "ably-chat-openapi/rustls"]
 chrono = ["dep:chrono"]
-time = ["dep:time"]
 
 [package.metadata.docs.rs]
 all-features = true

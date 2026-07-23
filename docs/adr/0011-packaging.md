@@ -12,9 +12,9 @@ of which use the "Ably" trademark and are unofficial.
 ## Decision
 
 - **Members (both published):** `ably-chat-rs` (ergonomic; import path
-  `ably_chat`) and `ably-chat-rs-openapi` (generated; import path
-  `ably_chat_openapi`). Both share the `ably-chat-rs` stem for a consistent
-  family. Released in dependency order: `ably-chat-rs-openapi` first, then
+  `ably_chat`) and `ably-chat-openapi` (generated; import path
+  `ably_chat_openapi`). Both share the `ably-chat` stem for a consistent
+  family. Released in dependency order: `ably-chat-openapi` first, then
   `ably-chat-rs`.
 - **Unofficial:** both crate descriptions and READMEs state they are not
   affiliated with or endorsed by Ably. The bare name `ably-chat` is avoided

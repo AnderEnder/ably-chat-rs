@@ -62,7 +62,8 @@ impl<T: DeserializeOwned + Send + 'static> Page<T> {
     /// resolving the `next` link (if present) to an absolute URL.
     fn from_response(client: Client, resp: &RawResponse) -> Result<Self> {
         let items = decode_json::<Vec<T>>(&resp.body)?;
-        let next = parse_next_link(&resp.headers).map(|link| resolve_url(&client.inner.base, &link));
+        let next =
+            parse_next_link(&resp.headers).map(|link| resolve_url(&client.inner.base, &link));
         Ok(Self {
             items,
             next,
@@ -259,9 +260,7 @@ mod tests {
         let mut combined = HeaderMap::new();
         combined.append(
             LINK,
-            HeaderValue::from_static(
-                "</m?cont=cur>; rel=\"current\", </m?cont=n>; rel=\"next\"",
-            ),
+            HeaderValue::from_static("</m?cont=cur>; rel=\"current\", </m?cont=n>; rel=\"next\""),
         );
         assert_eq!(parse_next_link(&combined).as_deref(), Some("/m?cont=n"));
 
@@ -292,10 +291,7 @@ mod tests {
             .and(query_param_is_missing("cont"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .append_header(
-                        "Link",
-                        "</chat/v4/rooms/r/messages?cont=2>; rel=\"next\"",
-                    )
+                    .append_header("Link", "</chat/v4/rooms/r/messages?cont=2>; rel=\"next\"")
                     .set_body_string(format!("[{}]", message_json("m1"))),
             )
             .mount(&server)
@@ -337,10 +333,7 @@ mod tests {
             .and(query_param_is_missing("cont"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .append_header(
-                        "Link",
-                        "</chat/v4/rooms/r/messages?cont=2>; rel=\"next\"",
-                    )
+                    .append_header("Link", "</chat/v4/rooms/r/messages?cont=2>; rel=\"next\"")
                     .set_body_string(format!("[{}]", message_json("m1"))),
             )
             .mount(&server)

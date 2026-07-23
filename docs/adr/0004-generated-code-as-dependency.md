@@ -9,16 +9,16 @@
 
 Given the workspace ([ADR-0002](0002-workspace-topology.md)) and that the
 ergonomic layer owns its own call path ([ADR-0003](0003-own-the-call-layer.md)),
-the generated crate `ably-chat-rs-openapi` is not on the ergonomic critical path.
+the generated crate `ably-chat-openapi` is not on the ergonomic critical path.
 It is still valuable: complete, spec-faithful, and regenerable — a useful escape
 hatch when the ergonomic API has a gap.
 
 ## Decision
 
-The ergonomic crate `ably-chat-rs` **depends on** `ably-chat-rs-openapi` and
+The ergonomic crate `ably-chat-rs` **depends on** `ably-chat-openapi` and
 re-exports it as **`pub mod raw`** — a low-level escape hatch. The `raw` module
 is **not covered by the pre-1.0 stability story** and tracks the generated
-crate's version; regeneration replaces `ably-chat-rs-openapi` wholesale.
+crate's version; regeneration replaces `ably-chat-openapi` wholesale.
 
 ## Consequences
 

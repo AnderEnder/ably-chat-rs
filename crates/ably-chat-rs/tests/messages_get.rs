@@ -51,9 +51,11 @@ async fn get_message_not_found_maps_error() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/chat/v4/rooms/r/messages/missing"))
-        .respond_with(ResponseTemplate::new(404).set_body_string(
-            r#"{"error":{"code":40400,"message":"not found","statusCode":404}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(404).set_body_string(
+                r#"{"error":{"code":40400,"message":"not found","statusCode":404}}"#,
+            ),
+        )
         .mount(&server)
         .await;
 
