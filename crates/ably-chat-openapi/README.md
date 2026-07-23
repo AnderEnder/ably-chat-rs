@@ -1,13 +1,13 @@
-# ably-chat-rs-openapi
+# ably-chat-openapi
 
-[![crates.io](https://img.shields.io/crates/v/ably-chat-rs-openapi.svg)](https://crates.io/crates/ably-chat-rs-openapi)
-[![docs.rs](https://img.shields.io/docsrs/ably-chat-rs-openapi)](https://docs.rs/ably-chat-rs-openapi)
+[![crates.io](https://img.shields.io/crates/v/ably-chat-openapi.svg)](https://crates.io/crates/ably-chat-openapi)
+[![docs.rs](https://img.shields.io/docsrs/ably-chat-openapi)](https://docs.rs/ably-chat-openapi)
 
 **Unofficial**, machine-generated OpenAPI bindings for the
 [Ably Chat](https://ably.com/docs/chat) REST API (v4). Not affiliated with or
 endorsed by Ably.
 
-The crate publishes as `ably-chat-rs-openapi` and imports as
+The crate publishes as `ably-chat-openapi` and imports as
 `ably_chat_openapi`.
 
 ## Prefer `ably-chat-rs`
@@ -17,7 +17,7 @@ Most users should depend on the ergonomic crate
 hand-written, forward-compatible client over these bindings and re-exports them
 as `ably_chat::raw` for escape-hatch use.
 
-Reach for `ably-chat-rs-openapi` directly only when the ergonomic layer has a
+Reach for `ably-chat-openapi` directly only when the ergonomic layer has a
 gap you need to work around.
 
 ## Generated code

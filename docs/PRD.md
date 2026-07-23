@@ -127,7 +127,7 @@ code are pinned here (they drift); type shapes are described in prose.
 - **Workspace topology** ([ADR-0002](adr/0002-workspace-topology.md)): a Cargo
   workspace with two published member crates sharing the `ably-chat-rs` stem —
   `ably-chat-rs` (ergonomic, import `ably_chat`) depending on
-  `ably-chat-rs-openapi` (generated, import `ably_chat_openapi`).
+  `ably-chat-openapi` (generated, import `ably_chat_openapi`).
 - **Own the call layer** ([ADR-0003](adr/0003-own-the-call-layer.md)): the
   ergonomic crate owns one async HTTP dispatch function over `reqwest` and its
   own domain types. It does not call the generated API functions (they discard
@@ -165,7 +165,7 @@ code are pinned here (they drift); type shapes are described in prose.
   `DELETE`.
 - **Packaging** ([ADR-0011](adr/0011-packaging.md)): both crates unofficial, dual
   `MIT OR Apache-2.0`, edition 2024, MSRV 1.85, starting at 0.x; published in
-  dependency order (`ably-chat-rs-openapi` then `ably-chat-rs`).
+  dependency order (`ably-chat-openapi` then `ably-chat-rs`).
 
 ## Testing Decisions
 

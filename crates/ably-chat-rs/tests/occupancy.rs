@@ -13,8 +13,7 @@ async fn get_occupancy_returns_typed_metrics() {
         .and(path("/chat/v4/rooms/my-room/occupancy"))
         .and(header("x-ably-version", "4"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_string(r#"{"connections":3,"presenceMembers":2}"#),
+            ResponseTemplate::new(200).set_body_string(r#"{"connections":3,"presenceMembers":2}"#),
         )
         .expect(1)
         .mount(&server)
@@ -33,9 +32,10 @@ async fn get_occupancy_maps_api_error() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/chat/v4/rooms/r/occupancy"))
-        .respond_with(ResponseTemplate::new(404).set_body_string(
-            r#"{"error":{"code":40400,"message":"no","statusCode":404}}"#,
-        ))
+        .respond_with(
+            ResponseTemplate::new(404)
+                .set_body_string(r#"{"error":{"code":40400,"message":"no","statusCode":404}}"#),
+        )
         .mount(&server)
         .await;
 

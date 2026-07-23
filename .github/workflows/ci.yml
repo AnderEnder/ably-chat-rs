@@ -34,8 +34,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Format check
-        run: cargo fmt --all -- --check
+      - name: Format check (hand-written crate only; generated crate is opaque)
+        run: cargo fmt --check -p ably-chat-rs
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Docs (deny warnings)
@@ -63,7 +63,7 @@ jobs:
   # Codegen drift gate: regenerating the OpenAPI crate's source from the spec (with
   # the generator version pinned in openapitools.json) must reproduce the committed
   # src/ exactly. A non-empty diff means openapi/ably-chat-rest.yaml changed without
-  # re-running the generator and committing crates/ably-chat-rs-openapi/.
+  # re-running the generator and committing crates/ably-chat-openapi/.
   codegen-gate:
     name: openapi codegen drift gate
     runs-on: ubuntu-latest
@@ -84,8 +84,8 @@ jobs:
             -i openapi/ably-chat-rest.yaml \
             -g rust \
             -o /tmp/gen \
-            --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
-          diff -ru crates/ably-chat-rs-openapi/src /tmp/gen/src
+            --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+          diff -ru crates/ably-chat-openapi/src /tmp/gen/src
 
   # Build + test on every supported target. Suite is self-contained (wiremock, no
   # external services), so the full workspace runs on each. Linux + macOS native

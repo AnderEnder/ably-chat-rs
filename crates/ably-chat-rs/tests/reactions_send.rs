@@ -11,7 +11,9 @@ async fn send_defaults_to_distinct_and_posts_type_and_name() {
     Mock::given(method("POST"))
         .and(path("/chat/v4/rooms/r/messages/msg-1/reactions"))
         .and(header("x-ably-version", "4"))
-        .and(body_json(json!({ "type": "distinct", "name": "\u{1f44d}" })))
+        .and(body_json(
+            json!({ "type": "distinct", "name": "\u{1f44d}" }),
+        ))
         .respond_with(ResponseTemplate::new(201))
         .expect(1)
         .mount(&server)
@@ -58,7 +60,9 @@ async fn send_multiple_includes_count() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/chat/v4/rooms/r/messages/msg-1/reactions"))
-        .and(body_json(json!({ "type": "multiple", "name": "\u{1f389}", "count": 5 })))
+        .and(body_json(
+            json!({ "type": "multiple", "name": "\u{1f389}", "count": 5 }),
+        ))
         .respond_with(ResponseTemplate::new(201))
         .expect(1)
         .mount(&server)

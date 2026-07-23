@@ -6,7 +6,7 @@ two-crate Cargo workspace:
 
 - **[`crates/ably-chat-rs`](crates/ably-chat-rs)** (`ably_chat`) — the ergonomic
   client most users want.
-- **[`crates/ably-chat-rs-openapi`](crates/ably-chat-rs-openapi)**
+- **[`crates/ably-chat-openapi`](crates/ably-chat-openapi)**
   (`ably_chat_openapi`) — the generated bindings it is built on.
 
 Both are unofficial, not affiliated with or endorsed by Ably.
@@ -122,13 +122,13 @@ This repo is a two-crate Cargo workspace
 | Crate | Import path | Role |
 | ----- | ----------- | ---- |
 | [`crates/ably-chat-rs`](crates/ably-chat-rs) | `ably_chat` | **Start here.** Hand-written, ergonomic, forward-compatible client. |
-| [`crates/ably-chat-rs-openapi`](crates/ably-chat-rs-openapi) | `ably_chat_openapi` | Generated OpenAPI bindings; re-exported as `ably_chat::raw` (escape hatch). |
+| [`crates/ably-chat-openapi`](crates/ably-chat-openapi) | `ably_chat_openapi` | Generated OpenAPI bindings; re-exported as `ably_chat::raw` (escape hatch). |
 
 Both are unofficial and dual-licensed `MIT OR Apache-2.0`. Most users depend on
 `ably-chat-rs`; see its [crate README](crates/ably-chat-rs/README.md) for
 install and usage.
 
-The `ably-chat-rs-openapi` `src/` is regenerated from
+The `ably-chat-openapi` `src/` is regenerated from
 `openapi/ably-chat-rest.yaml` and **must not be hand-edited** (a CI codegen gate
 diffs it against a fresh regeneration). It was produced with:
 
@@ -136,8 +136,8 @@ diffs it against a fresh regeneration). It was produced with:
 npx @openapitools/openapi-generator-cli generate \
   -i openapi/ably-chat-rest.yaml \
   -g rust \
-  -o crates/ably-chat-rs-openapi \
-  --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+  -o crates/ably-chat-openapi \
+  --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
 ```
 
 The ergonomic wrapper layered over this generated crate is designed in
@@ -176,5 +176,5 @@ param, or schema changes.
 
 Dual-licensed under either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT)
 at your option. The same `MIT OR Apache-2.0` terms apply to both published
-crates (`ably-chat-rs` and `ably-chat-rs-openapi`). This is an unofficial
+crates (`ably-chat-rs` and `ably-chat-openapi`). This is an unofficial
 project, not affiliated with or endorsed by Ably.
