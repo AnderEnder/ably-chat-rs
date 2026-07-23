@@ -30,7 +30,7 @@ mod messages;
 pub use messages::{GetMessage, Messages};
 
 mod reactions;
-pub use reactions::Reactions;
+pub use reactions::{ClientReactions, Reactions};
 
 mod occupancy;
 pub use occupancy::{GetOccupancy, OccupancyHandle};
