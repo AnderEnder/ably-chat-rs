@@ -27,7 +27,9 @@ mod room;
 pub use room::Room;
 
 mod messages;
-pub use messages::{GetMessage, History, Messages, SendMessage, UpdateMessage, Versions};
+pub use messages::{
+    DeleteMessage, GetMessage, History, Messages, SendMessage, UpdateMessage, Versions,
+};
 
 mod reactions;
 pub use reactions::{ClientReactions, Reactions};
