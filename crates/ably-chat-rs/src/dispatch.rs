@@ -123,6 +123,16 @@ mod tests {
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
+    fn path_helpers_url_encode_segments() {
+        assert_eq!(room_path("my room", "/occupancy"), "/chat/v4/rooms/my%20room/occupancy");
+        // Serials carry `@` and `:`, which MUST be percent-encoded in the path.
+        assert_eq!(
+            message_path("r", "01ts-001@abc:001", "/versions"),
+            "/chat/v4/rooms/r/messages/01ts-001%40abc%3A001/versions"
+        );
+    }
+
+    #[test]
     fn retry_eligible_predicate() {
         assert!(Inner::retry_eligible(&Method::GET, false));
         assert!(Inner::retry_eligible(&Method::DELETE, false));

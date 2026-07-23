@@ -27,7 +27,7 @@ mod room;
 pub use room::Room;
 
 mod messages;
-pub use messages::Messages;
+pub use messages::{GetMessage, Messages};
 
 mod reactions;
 pub use reactions::Reactions;
