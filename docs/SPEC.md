@@ -132,8 +132,10 @@ Owned by the ergonomic crate ([ADR-0007](adr/0007-domain-modeling.md)):
 ## 8. Error model
 
 One public `#[non_exhaustive]` `Error` ([ADR-0008](adr/0008-error-model.md)) with
-transport / decode / api variants. The api variant carries `ErrorInfo`
-{ code, message, status_code, href? }. It MUST expose `status() -> Option<u16>`
+transport / decode / api / invalid-request variants. The api variant carries
+`ErrorInfo` { code, message, status_code, href? }; the invalid-request variant is
+raised client-side for pre-flight validation (e.g. deleting a `distinct`/`multiple`
+reaction without a name) before any request is sent. It MUST expose `status() -> Option<u16>`
 and `is_retryable() -> bool`, and SHOULD offer predicates for codes 40400
 (not found), 42211 (rejected by rule), 42213 (moderation). `Result<T>` alias
 provided.
