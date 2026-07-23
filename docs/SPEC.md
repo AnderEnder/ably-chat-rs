@@ -47,7 +47,7 @@ here lives in the [ADRs](adr/); code-level detail lives in
 Two-crate workspace ([ADR-0002](adr/0002-workspace-topology.md)):
 
 - `ably-chat-rs` (`use ably_chat`) — this specification's subject.
-- `ably-chat-rs-openapi` (`use ably_chat_openapi`) — generated bindings,
+- `ably-chat-openapi` (`use ably_chat_openapi`) — generated bindings,
   re-exported by the ergonomic crate as `ably_chat::raw` (low-level escape hatch,
   unstable; [ADR-0004](adr/0004-generated-code-as-dependency.md)).
 

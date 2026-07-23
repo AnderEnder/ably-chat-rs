@@ -1,8 +1,15 @@
 # Ably Chat REST API — OpenAPI specification
 
 An OpenAPI 3.0.3 specification for the [Ably Chat](https://ably.com/docs/chat)
-REST API, intended as the input for generating client SDKs (starting with
-Rust).
+REST API, plus the Rust SDK generated and hand-built from it. This repo is a
+two-crate Cargo workspace:
+
+- **[`crates/ably-chat-rs`](crates/ably-chat-rs)** (`ably_chat`) — the ergonomic
+  client most users want.
+- **[`crates/ably-chat-openapi`](crates/ably-chat-openapi)**
+  (`ably_chat_openapi`) — the generated bindings it is built on.
+
+Both are unofficial, not affiliated with or endorsed by Ably.
 
 - Spec: [`openapi/ably-chat-rest.yaml`](openapi/ably-chat-rest.yaml)
 - OpenAPI version: **3.0.3** (broadest Rust generator support)
@@ -107,26 +114,35 @@ The spec is written to be codegen-friendly (explicit `operationId`s, epoch-ms
 integers, `additionalProperties` typed for maps, minimal spurious `nullable`).
 Two common options:
 
-### openapi-generator (already applied)
+### The Rust SDK (this repository)
 
-The generated crate is committed at [`ably-chat-rs/`](ably-chat-rs/): published
-name `ably-chat-rs`, import path `ably_chat`, edition 2024, version `0.1.0`,
-marked unofficial, and it compiles (`cargo check`). It was produced with:
+This repo is a two-crate Cargo workspace
+([ADR-0002](docs/adr/0002-workspace-topology.md)):
+
+| Crate | Import path | Role |
+| ----- | ----------- | ---- |
+| [`crates/ably-chat-rs`](crates/ably-chat-rs) | `ably_chat` | **Start here.** Hand-written, ergonomic, forward-compatible client. |
+| [`crates/ably-chat-openapi`](crates/ably-chat-openapi) | `ably_chat_openapi` | Generated OpenAPI bindings; re-exported as `ably_chat::raw` (escape hatch). |
+
+Both are unofficial and dual-licensed `MIT OR Apache-2.0`. Most users depend on
+`ably-chat-rs`; see its [crate README](crates/ably-chat-rs/README.md) for
+install and usage.
+
+The `ably-chat-openapi` `src/` is regenerated from
+`openapi/ably-chat-rest.yaml` and **must not be hand-edited** (a CI codegen gate
+diffs it against a fresh regeneration). It was produced with:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
   -i openapi/ably-chat-rest.yaml \
   -g rust \
-  -o ably-chat-rs \
-  --additional-properties=packageName=ably-chat-rs,packageVersion=0.1.0,supportAsync=true,library=reqwest
+  -o crates/ably-chat-openapi \
+  --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
 ```
 
-Post-generation, `Cargo.toml` was hand-tuned: `[lib] name = "ably_chat"` (so it
-publishes as `ably-chat-rs` but imports as `ably_chat`), `edition = "2024"` +
-`rust-version = "1.85"`, an unofficial description, and crates.io metadata
-(set `repository`/`homepage` before publishing). A hand-written ergonomic
-wrapper over this generated layer is designed in
-[`docs/rust-wrapper-design.md`](docs/rust-wrapper-design.md).
+The ergonomic wrapper layered over this generated crate is designed in
+[`docs/rust-wrapper-design.md`](docs/rust-wrapper-design.md) and specified in
+[`docs/SPEC.md`](docs/SPEC.md).
 
 ### progenitor (Rust-native, generates a typed reqwest client)
 
@@ -159,6 +175,6 @@ param, or schema changes.
 ## License
 
 Dual-licensed under either [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT)
-at your option (the same `MIT OR Apache-2.0` terms apply to the generated
-`ably-chat-rs` crate). This is an unofficial project, not affiliated with or
-endorsed by Ably.
+at your option. The same `MIT OR Apache-2.0` terms apply to both published
+crates (`ably-chat-rs` and `ably-chat-openapi`). This is an unofficial
+project, not affiliated with or endorsed by Ably.

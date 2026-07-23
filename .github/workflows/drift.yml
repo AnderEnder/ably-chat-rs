@@ -63,7 +63,7 @@ jobs:
             echo "### Maintainer: review the REST layer for changes"
             echo "1. Diff the SDK REST layer between the two versions — \`src/core/chat-api.ts\` (endpoints, verbs, params, bodies) and \`src/core/rest-types.ts\` (response schemas)."
             echo "2. If anything changed, update \`openapi/ably-chat-rest.yaml\` and re-run \`npx @redocly/cli lint\`."
-            echo "3. Regenerate the crate: \`npx @openapitools/openapi-generator-cli generate -i openapi/ably-chat-rest.yaml -g rust -o crates/ably-chat-rs-openapi --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest\`."
+            echo "3. Regenerate the crate: \`npx @openapitools/openapi-generator-cli generate -i openapi/ably-chat-rest.yaml -g rust -o crates/ably-chat-openapi --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest\`."
             echo "4. Reconcile the ergonomic layer if the surface changed, bump \`openapi/upstream.lock\` to \`$LATEST\`, run \`cargo test --workspace\`, and open a PR."
           } > drift-body.md
 

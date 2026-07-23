@@ -1,31 +1,12 @@
-[package]
-name = "ably-chat-rs"
+[workspace]
+resolver = "3"
+members = ["crates/ably-chat-rs", "crates/ably-chat-openapi"]
+
+[workspace.package]
 version = "0.1.0"
 authors = ["Andrii Radyk <andrii@natter.co>"]
-description = "Unofficial Rust client for the Ably Chat REST API (v4). Generated from an OpenAPI specification. Not affiliated with or endorsed by Ably."
 license = "MIT OR Apache-2.0"
 edition = "2024"
 rust-version = "1.85"
-readme = "README.md"
-documentation = "https://docs.rs/ably-chat-rs"
-keywords = ["ably", "chat", "rest", "client", "sdk"]
-categories = ["api-bindings", "web-programming::http-client"]
-# TODO: set these to your public repository before `cargo publish`.
-# repository = "https://github.com/<you>/ably-chat-rs"
-# homepage = "https://github.com/<you>/ably-chat-rs"
-
-[lib]
-# Published crate name is `ably-chat-rs`; import path is `ably_chat`.
-name = "ably_chat"
-
-[dependencies]
-serde = { version = "^1.0", features = ["derive"] }
-serde_json = "^1.0"
-serde_repr = "^0.1"
-url = "^2.5"
-reqwest = { version = "^0.13", default-features = false, features = ["json", "multipart", "query", "form"] }
-
-[features]
-default = ["native-tls"]
-native-tls = ["reqwest/native-tls"]
-rustls = ["reqwest/rustls"]
+repository = "https://github.com/AnderEnder/ably-chat-rs"
+homepage = "https://github.com/AnderEnder/ably-chat-rs"

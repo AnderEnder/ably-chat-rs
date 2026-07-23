@@ -21,18 +21,20 @@ A Cargo **workspace** at the repository root (repo name `ably-chat-rs`) with two
 
 - `crates/ably-chat-rs/` — the ergonomic crate (import path `ably_chat`), the
   primary crate users install. Depends on the generated crate.
-- `crates/ably-chat-rs-openapi/` — the generated crate (import path
+- `crates/ably-chat-openapi/` — the generated crate (import path
   `ably_chat_openapi`), refreshed wholesale by the OpenAPI generator.
 
-Both members share the `ably-chat-rs` stem for a consistent crate family; the
-primary crate is unsuffixed (cf. `serde`/`serde_derive`, `tokio`/`tokio-macros`).
+Both members share the `ably-chat` stem for a consistent crate family (cf.
+`k8s-openapi`, `kube`/`kube-client`, `serde`/`serde_derive`). `-rs` on the
+primary crate is a trailing disambiguator (bare `ably-chat` is ruled out on
+trademark grounds); a mid-string `-rs-` suffix is not a Rust naming convention.
 
 ## Consequences
 
-- Regeneration targets `crates/ably-chat-rs-openapi/` only; the ergonomic crate is
+- Regeneration targets `crates/ably-chat-openapi/` only; the ergonomic crate is
   physically separate and never clobbered — no path rewriting.
 - **Two crates are published to crates.io**, released in dependency order
-  (`ably-chat-rs-openapi` first, then `ably-chat-rs`). Both use the "Ably" mark, so
+  (`ably-chat-openapi` first, then `ably-chat-rs`). Both use the "Ably" mark, so
   both are marked unofficial and dual-licensed (see [ADR-0011](0011-packaging.md)).
 - Reverses the earlier single-crate repo collapse: `src/` at the root moves under
   `crates/`.

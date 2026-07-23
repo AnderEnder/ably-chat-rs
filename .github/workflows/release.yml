@@ -14,7 +14,7 @@
 #     Cargo.lock) BEFORE tagging, or you republish the old version.
 #   - Requires repo secret `CARGO_TOKEN` (crates.io API token).
 #   - `cargo publish --workspace` publishes in dependency order:
-#     `ably-chat-rs-openapi` first, then `ably-chat-rs`.
+#     `ably-chat-openapi` first, then `ably-chat-rs`.
 #   - No `|| true`: a re-tag of an already-published version SHOULD fail loudly.
 #     Bump the version before tagging again.
 
