@@ -1,0 +1,795 @@
+openapi: 3.0.3
+info:
+  title: Ably Chat REST API
+  version: "4"
+  description: >
+    REST API for [Ably Chat](https://ably.com/docs/chat).
+
+
+    This specification describes the HTTP surface of the Ably Chat REST API
+    (path prefix `/chat/v4`) that the official Chat client SDKs use for
+    request/response operations such as sending, editing, deleting and
+    querying messages, message reactions and room occupancy.
+
+
+    ## Scope & provenance
+
+    Ably does **not** publish an official OpenAPI document for the Chat REST
+    API (the official `ably/open-specs` `platform-v1.yaml` covers only the
+    generic pub/sub REST API: `/channels`, `/push`, `/keys`, `/stats`,
+    `/time`). This document was reconstructed from the `@ably/chat` JavaScript
+    SDK v1.4.0 REST layer (`src/core/chat-api.ts`, `src/core/rest-types.ts`)
+    together with Ably's documented REST conventions (host, authentication,
+    versioning, pagination, error envelope).
+
+
+    It therefore covers the endpoints the client SDK exercises. It is
+    **not** an exhaustive description of every server capability, and there
+    are intentionally no endpoints for creating or deleting rooms: Chat rooms
+    are channel-backed and implicit — they are not provisioned via REST.
+
+
+    ## Realtime vs REST
+
+    Many Chat features (presence, typing indicators, room reactions,
+    subscribing to live messages and reaction summaries) are delivered over
+    Ably's realtime/pub-sub transport, not this REST API, and are out of scope
+    here.
+  license:
+    name: MIT OR Apache-2.0
+
+servers:
+  - url: https://{host}
+    description: Ably REST endpoint
+    variables:
+      host:
+        default: rest.ably.io
+        description: >
+          Ably REST host. `rest.ably.io` is the primary global endpoint.
+          Fallback/routing hosts (e.g. `main.realtime.ably.net`,
+          `[a-e].ably-realtime.com`) and dedicated/regional environment hosts
+          may be used depending on your account configuration.
+
+security:
+  - basicKey: []
+  - bearerToken: []
+
+tags:
+  - name: Messages
+    description: Send, retrieve, edit, delete and query the history of chat messages.
+  - name: Message Reactions
+    description: Add and remove reactions on messages, and query a client's reactions.
+  - name: Occupancy
+    description: Retrieve occupancy metrics for a room.
+
+paths:
+  /chat/v4/rooms/{roomName}/messages:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/AblyVersion'
+    get:
+      tags: [Messages]
+      operationId: getMessages
+      summary: Get message history
+      description: >
+        Returns a paginated list of messages for a room, ordered per the
+        `direction` parameter. The response body is a JSON array of messages;
+        pagination is conveyed via RFC 5988 `Link` response headers
+        (`rel="first"`, `rel="current"`, `rel="next"`).
+      parameters:
+        - name: start
+          in: query
+          required: false
+          description: >
+            Earliest message timestamp to include, as milliseconds since the
+            Unix epoch. Messages with a timestamp greater than or equal to this
+            value are returned. Defaults to the beginning of time.
+          schema:
+            type: integer
+            format: int64
+            example: 1700000000000
+        - name: end
+          in: query
+          required: false
+          description: >
+            Latest message timestamp to include, as milliseconds since the Unix
+            epoch. Messages with a timestamp strictly less than this value are
+            returned. Defaults to now.
+          schema:
+            type: integer
+            format: int64
+            example: 1700003600000
+        - name: direction
+          in: query
+          required: false
+          description: >
+            Order in which to return messages. `backwards` returns newest
+            first; `forwards` returns oldest first.
+          schema:
+            type: string
+            enum: [forwards, backwards]
+            default: backwards
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of messages to return in a single page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: fromSerial
+          in: query
+          required: false
+          description: >
+            Serial indicating the starting point for message retrieval. This
+            serial is specific to the region of the channel the client is
+            connected to.
+          schema:
+            type: string
+            example: "01726585978590-001@abcdefghij:001"
+      responses:
+        '200':
+          description: A page of messages.
+          headers:
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Messages]
+      operationId: sendMessage
+      summary: Send a message
+      description: Publishes a new message to the room.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: The created message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Rejected'
+
+  /chat/v4/rooms/{roomName}/messages/{serial}:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/MessageSerial'
+      - $ref: '#/components/parameters/AblyVersion'
+    get:
+      tags: [Messages]
+      operationId: getMessage
+      summary: Get a single message
+      description: Returns the latest version of a single message by its serial.
+      responses:
+        '200':
+          description: The message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Messages]
+      operationId: updateMessage
+      summary: Update (edit) a message
+      description: >
+        Updates a message. All fields under `message` are replaced; any
+        omitted `message` field is reset to empty. Produces a new message
+        version with action `message.update`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMessageRequest'
+      responses:
+        '200':
+          description: The updated message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chat/v4/rooms/{roomName}/messages/{serial}/delete:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/MessageSerial'
+      - $ref: '#/components/parameters/AblyVersion'
+    post:
+      tags: [Messages]
+      operationId: deleteMessage
+      summary: Delete a message
+      description: >
+        Soft-deletes a message. This is a `POST` to a `/delete` sub-resource
+        (not an HTTP `DELETE`). Produces a new message version with action
+        `message.delete`; the deleted message remains retrievable with its
+        delete action applied.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteMessageRequest'
+      responses:
+        '200':
+          description: The deleted message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chat/v4/rooms/{roomName}/messages/{serial}/versions:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/MessageSerial'
+      - $ref: '#/components/parameters/AblyVersion'
+    get:
+      tags: [Messages]
+      operationId: getMessageVersions
+      summary: Get message versions
+      description: >
+        Returns a paginated list of all versions (create, updates, deletes) of
+        a message. The response body is a JSON array; pagination is conveyed
+        via RFC 5988 `Link` response headers.
+      responses:
+        '200':
+          description: A page of message versions.
+          headers:
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chat/v4/rooms/{roomName}/messages/{serial}/reactions:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/MessageSerial'
+      - $ref: '#/components/parameters/AblyVersion'
+    post:
+      tags: [Message Reactions]
+      operationId: sendMessageReaction
+      summary: Add a message reaction
+      description: >
+        Adds a reaction to a message. Behaviour depends on the reaction
+        `type`: `unique` (at most one reaction per client), `distinct` (at most
+        one of each named reaction per client), `multiple` (repeatable, counted
+        by `count`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageReactionRequest'
+      responses:
+        '201':
+          description: The reaction was accepted. No response body.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Message Reactions]
+      operationId: deleteMessageReaction
+      summary: Remove a message reaction
+      description: >
+        Removes a reaction from a message. For `unique` reactions the `name` is
+        not required; for `distinct` and `multiple` reactions the `name` is
+        required.
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: The reaction type to remove.
+          schema:
+            $ref: '#/components/schemas/MessageReactionType'
+        - name: name
+          in: query
+          required: false
+          description: >
+            The reaction name (e.g. the emoji) to remove. Required for all
+            reaction types except `unique`.
+          schema:
+            type: string
+            example: "👍"
+      responses:
+        '204':
+          description: The reaction was removed. No response body.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chat/v4/rooms/{roomName}/messages/{serial}/client-reactions:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/MessageSerial'
+      - $ref: '#/components/parameters/AblyVersion'
+    get:
+      tags: [Message Reactions]
+      operationId: getClientReactions
+      summary: Get a client's reactions on a message
+      description: >
+        Returns the reaction summary filtered to a single client. Useful when a
+        message's reaction summary is clipped (too many reacting clients) and
+        you need to determine whether a specific client has reacted.
+      parameters:
+        - name: forClientId
+          in: query
+          required: false
+          description: >
+            The client ID to filter reactions by. Defaults to the client ID of
+            the authenticated caller.
+          schema:
+            type: string
+            example: "user-123"
+      responses:
+        '200':
+          description: The reaction summary for the requested client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageReactions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chat/v4/rooms/{roomName}/occupancy:
+    parameters:
+      - $ref: '#/components/parameters/RoomName'
+      - $ref: '#/components/parameters/AblyVersion'
+    get:
+      tags: [Occupancy]
+      operationId: getOccupancy
+      summary: Get room occupancy
+      description: Returns current occupancy metrics for a room.
+      responses:
+        '200':
+          description: The room occupancy metrics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Occupancy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    basicKey:
+      type: http
+      scheme: basic
+      description: >
+        HTTP Basic authentication using an Ably API key. The key name is the
+        username and the key secret is the password (i.e.
+        `Authorization: Basic base64(keyName:keySecret)`).
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: >
+        Bearer authentication using an Ably Token, Ably JWT, or an external JWT
+        containing an embedded Ably token.
+
+  parameters:
+    RoomName:
+      name: roomName
+      in: path
+      required: true
+      description: The name of the chat room. Sent URL-encoded.
+      schema:
+        type: string
+      example: "sports-chat"
+    MessageSerial:
+      name: serial
+      in: path
+      required: true
+      description: The unique serial identifier of the message. Sent URL-encoded.
+      schema:
+        type: string
+      example: "01726585978590-001@abcdefghij:001"
+    AblyVersion:
+      name: X-Ably-Version
+      in: header
+      required: false
+      description: >
+        The Ably API version. The Chat SDK sends `4`. May alternatively be
+        supplied as the `?v=` query parameter.
+      schema:
+        type: string
+        default: "4"
+    IdempotencyKey:
+      name: idempotencyKey
+      in: query
+      required: false
+      description: >
+        Optional idempotency key for safely retrying a create/update/delete
+        without risking duplicate operations. The SDK generates one
+        automatically when idempotent REST publishing is enabled.
+      schema:
+        type: string
+
+  headers:
+    Link:
+      description: >
+        RFC 5988 pagination link. One `Link` header is emitted per relation;
+        supported relations are `first`, `current` and `next`.
+      schema:
+        type: string
+      example: '</chat/v4/rooms/sports-chat/messages?limit=100&direction=backwards&cont=xyz>; rel="next"'
+
+  responses:
+    BadRequest:
+      description: The request was malformed or contained invalid arguments.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or the credentials lack permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The room or message does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Rejected:
+      description: >
+        The message was rejected before publishing, e.g. by a room rule
+        (Ably error code 42211) or by moderation (Ably error code 42213).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Metadata:
+      type: object
+      description: >
+        Arbitrary user-defined metadata. Not interpreted or validated by Ably;
+        treat as untrusted input when reading.
+      additionalProperties: true
+      example:
+        priority: high
+
+    Headers:
+      type: object
+      description: >
+        Arbitrary user-defined string headers, carried as Ably message
+        `extras.headers`. Not interpreted or validated by Ably.
+      additionalProperties:
+        type: string
+      example:
+        topic: announcements
+
+    MessageAction:
+      type: string
+      description: The action that produced this message version.
+      enum:
+        - message.create
+        - message.update
+        - message.delete
+
+    MessageReactionType:
+      type: string
+      description: >
+        The reaction aggregation model. `unique`: at most one reaction per
+        client. `distinct`: at most one of each named reaction per client.
+        `multiple`: repeatable and counted.
+      enum:
+        - unique
+        - distinct
+        - multiple
+
+    MessageVersion:
+      type: object
+      description: Details of the latest create/update/delete version of a message.
+      required:
+        - serial
+        - timestamp
+      properties:
+        serial:
+          type: string
+          description: Unique identifier of this message version.
+        timestamp:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch at which this version was created.
+        clientId:
+          type: string
+          description: Client ID of the user who performed the update or deletion.
+        description:
+          type: string
+          description: Optional description supplied with an update or deletion.
+        metadata:
+          type: object
+          description: Optional metadata supplied with an update or deletion operation.
+          additionalProperties:
+            type: string
+
+    Message:
+      type: object
+      description: A chat message in the V4 REST representation.
+      required:
+        - serial
+        - version
+        - text
+        - clientId
+        - action
+        - metadata
+        - headers
+        - timestamp
+      properties:
+        serial:
+          type: string
+          description: The unique identifier of the message.
+          example: "01726585978590-001@abcdefghij:001"
+        version:
+          $ref: '#/components/schemas/MessageVersion'
+        text:
+          type: string
+          description: The text content of the message.
+        clientId:
+          type: string
+          description: The client ID of the user who created the message.
+        action:
+          $ref: '#/components/schemas/MessageAction'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        headers:
+          $ref: '#/components/schemas/Headers'
+        timestamp:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch at which the message was created.
+        userClaim:
+          type: string
+          description: >
+            User claim attached by the server when the publishing token
+            contained a matching `ably.room.<roomName>` claim. Present only in
+            that case.
+        reactions:
+          $ref: '#/components/schemas/MessageReactions'
+
+    MessageReactions:
+      type: object
+      description: >
+        Summary of reactions on a message, grouped by reaction type. Each map
+        is keyed by the reaction name (e.g. an emoji).
+      properties:
+        unique:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ClientIdList'
+        distinct:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ClientIdList'
+        multiple:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ClientIdCounts'
+
+    ClientIdList:
+      type: object
+      description: Aggregated set of client IDs for a unique/distinct reaction.
+      required:
+        - total
+        - clientIds
+      properties:
+        total:
+          type: integer
+          description: Total number of clients that applied this reaction.
+        clientIds:
+          type: array
+          items:
+            type: string
+          description: The client IDs that applied this reaction.
+        clipped:
+          type: boolean
+          description: >
+            Whether the `clientIds` list was truncated because there were too
+            many reacting clients.
+
+    ClientIdCounts:
+      type: object
+      description: Aggregated per-client counts for a `multiple` reaction.
+      required:
+        - total
+        - clientIds
+        - totalUnidentified
+      properties:
+        total:
+          type: integer
+          description: Total count across all clients (sum of per-client counts).
+        clientIds:
+          type: object
+          description: Map of client ID to that client's reaction count.
+          additionalProperties:
+            type: integer
+        totalUnidentified:
+          type: integer
+          description: Total count contributed by unidentified clients.
+        clipped:
+          type: boolean
+          description: Whether the `clientIds` map was truncated.
+        totalClientIds:
+          type: integer
+          description: Total number of distinct client IDs that reacted.
+
+    Occupancy:
+      type: object
+      description: Occupancy metrics for a room.
+      required:
+        - connections
+        - presenceMembers
+      properties:
+        connections:
+          type: integer
+          description: The number of connections to the room.
+        presenceMembers:
+          type: integer
+          description: The number of members currently present in the room.
+
+    SendMessageRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          description: The text content of the message.
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        headers:
+          $ref: '#/components/schemas/Headers'
+
+    UpdateMessageRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: object
+          description: >
+            The new message content. All fields are replaced; omitted fields
+            are reset to empty.
+          required:
+            - text
+          properties:
+            text:
+              type: string
+            metadata:
+              $ref: '#/components/schemas/Metadata'
+            headers:
+              $ref: '#/components/schemas/Headers'
+        description:
+          type: string
+          description: Optional description of the update operation.
+        metadata:
+          type: object
+          description: Optional metadata for the update operation.
+          additionalProperties:
+            type: string
+
+    DeleteMessageRequest:
+      type: object
+      description: Optional details describing the deletion.
+      properties:
+        description:
+          type: string
+          description: Optional description of the delete operation.
+        metadata:
+          type: object
+          description: Optional metadata for the delete operation.
+          additionalProperties:
+            type: string
+
+    SendMessageReactionRequest:
+      type: object
+      required:
+        - type
+        - name
+      properties:
+        type:
+          $ref: '#/components/schemas/MessageReactionType'
+        name:
+          type: string
+          description: The reaction name to add (e.g. an emoji).
+          example: "👍"
+        count:
+          type: integer
+          minimum: 1
+          default: 1
+          description: >
+            The count for a `multiple`-type reaction. Defaults to 1. Not
+            supported for other reaction types.
+
+    ErrorResponse:
+      type: object
+      description: Ably standard error envelope.
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+
+    ErrorInfo:
+      type: object
+      required:
+        - code
+        - message
+        - statusCode
+      properties:
+        code:
+          type: integer
+          description: Ably-specific error code.
+          example: 40400
+        message:
+          type: string
+          description: Human-readable error message.
+        statusCode:
+          type: integer
+          description: HTTP status code.
+          example: 404
+        href:
+          type: string
+          description: URL to Ably documentation for this error code.

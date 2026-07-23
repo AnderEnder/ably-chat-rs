@@ -1,0 +1,111 @@
+# Build/test CI — adapted from work/sendgrid's ci.yml.
+#
+# Differences from that reference:
+#   - This is a LIBRARY workspace (no binary), so there is nothing to cross-compile.
+#   - Per project constraint, the test matrix is limited to Linux + macOS NATIVE
+#     runners only: no Windows, no musl/cross builds.
+#   - The "codegen drift gate" here regenerates the OpenAPI crate's Rust source
+#     from openapi/ably-chat-rest.yaml (generator version pinned by openapitools.json)
+#     and asserts it reproduces the committed src/ byte-for-byte.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # fmt, clippy, docs, and the feature matrix are OS-independent — run once on ubuntu.
+  lint:
+    name: fmt + clippy + docs (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Docs (deny warnings)
+        run: cargo doc --workspace --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Feature matrix (ergonomic crate)
+        run: |
+          cargo check -p ably-chat-rs --no-default-features --features rustls
+          cargo check -p ably-chat-rs --all-features
+
+  msrv:
+    name: MSRV 1.85
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv
+      - run: cargo check --workspace --all-features
+
+  # Codegen drift gate: regenerating the OpenAPI crate's source from the spec (with
+  # the generator version pinned in openapitools.json) must reproduce the committed
+  # src/ exactly. A non-empty diff means openapi/ably-chat-rest.yaml changed without
+  # re-running the generator and committing crates/ably-chat-rs-openapi/.
+  codegen-gate:
+    name: openapi codegen drift gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Regenerate the OpenAPI crate source and diff
+        run: |
+          set -euo pipefail
+          # The wrapper reads the pinned generator version from openapitools.json.
+          npx --yes @openapitools/openapi-generator-cli generate \
+            -i openapi/ably-chat-rest.yaml \
+            -g rust \
+            -o /tmp/gen \
+            --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+          diff -ru crates/ably-chat-rs-openapi/src /tmp/gen/src
+
+  # Build + test on every supported target. Suite is self-contained (wiremock, no
+  # external services), so the full workspace runs on each. Linux + macOS native
+  # runners only — no Windows, no cross-compilation.
+  test:
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.os }}
+      - name: Build
+        run: cargo build --workspace --verbose
+      - name: Test
+        run: cargo test --workspace --all-features --verbose
+        env:
+          RUST_BACKTRACE: 1

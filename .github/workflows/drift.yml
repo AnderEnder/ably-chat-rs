@@ -1,0 +1,80 @@
+# Upstream drift watcher — adapted from work/sendgrid's drift.yml.
+#
+# The sendgrid version diffs a vendored OpenAPI spec against an upstream OpenAPI
+# repo. This project's spec was RECONSTRUCTED from the `@ably/chat` JS SDK (there
+# is no upstream machine-readable spec), so the closest signal is: has `@ably/chat`
+# published a version newer than the one we tracked? If so, open (or update) one
+# tracking issue with the maintainer steps to review the REST layer for changes.
+#
+# The tracked version is the single source of truth in openapi/upstream.lock.
+
+name: upstream-drift
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compare tracked vs latest @ably/chat
+        id: check
+        run: |
+          set -euo pipefail
+          tracked=$(grep -E '^version' openapi/upstream.lock | sed -E 's/.*"(.*)".*/\1/')
+          latest=$(npm view @ably/chat version)
+          echo "tracked=$tracked" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest"   >> "$GITHUB_OUTPUT"
+          if [ "$tracked" != "$latest" ]; then
+            echo "drift=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=0" >> "$GITHUB_OUTPUT"
+            echo "no drift: tracked=$tracked latest=$latest"
+          fi
+
+      - name: Open / update drift issue
+        if: steps.check.outputs.drift == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TRACKED: ${{ steps.check.outputs.tracked }}
+          LATEST: ${{ steps.check.outputs.latest }}
+        run: |
+          set -euo pipefail
+          label="upstream-drift"
+          gh label create "$label" --color FBCA04 --description "Upstream @ably/chat SDK changed" 2>/dev/null || true
+
+          {
+            echo "The \`@ably/chat\` SDK that \`openapi/ably-chat-rest.yaml\` was reconstructed from has a newer release."
+            echo
+            echo "- Tracked (\`openapi/upstream.lock\`): \`$TRACKED\`"
+            echo "- Latest on npm: \`$LATEST\`"
+            echo
+            echo "### Maintainer: review the REST layer for changes"
+            echo "1. Diff the SDK REST layer between the two versions — \`src/core/chat-api.ts\` (endpoints, verbs, params, bodies) and \`src/core/rest-types.ts\` (response schemas)."
+            echo "2. If anything changed, update \`openapi/ably-chat-rest.yaml\` and re-run \`npx @redocly/cli lint\`."
+            echo "3. Regenerate the crate: \`npx @openapitools/openapi-generator-cli generate -i openapi/ably-chat-rest.yaml -g rust -o crates/ably-chat-rs-openapi --additional-properties=packageName=ably-chat-rs-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest\`."
+            echo "4. Reconcile the ergonomic layer if the surface changed, bump \`openapi/upstream.lock\` to \`$LATEST\`, run \`cargo test --workspace\`, and open a PR."
+          } > drift-body.md
+
+          # De-dup: one open issue at a time.
+          existing=$(gh issue list --state open --label "$label" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file drift-body.md
+            echo "commented on existing drift issue #$existing"
+          else
+            gh issue create \
+              --title "Upstream @ably/chat drift: $TRACKED → $LATEST" \
+              --label "$label" \
+              --body-file drift-body.md
+          fi

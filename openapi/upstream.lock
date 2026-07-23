@@ -1,0 +1,5 @@
+# Upstream source that openapi/ably-chat-rest.yaml was reconstructed from.
+# The drift workflow (.github/workflows/drift.yml) reads `version` from here and
+# opens a tracking issue when @ably/chat publishes a newer release.
+package = "@ably/chat"
+version = "1.4.0"
