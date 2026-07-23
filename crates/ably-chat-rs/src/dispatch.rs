@@ -13,6 +13,10 @@ use crate::error::{Error, Result};
 /// A raw HTTP response: status, headers (for pagination `Link`s), and body.
 #[derive(Debug)]
 pub(crate) struct RawResponse {
+    /// The 2xx status code. Part of the raw-response contract and asserted in
+    /// dispatch tests; typed operations only consume `headers`/`body` because
+    /// non-2xx statuses are already mapped to [`Error`].
+    #[allow(dead_code)]
     pub status: u16,
     pub headers: HeaderMap,
     pub body: bytes::Bytes,
