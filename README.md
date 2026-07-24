@@ -16,7 +16,9 @@ two-crate Cargo workspace:
 
 Both are unofficial, not affiliated with or endorsed by Ably.
 
-- Spec: [`openapi/ably-chat-rest.yaml`](openapi/ably-chat-rest.yaml)
+- Specs: [`openapi/ably-chat-rest.yaml`](openapi/ably-chat-rest.yaml) (Chat REST)
+  and [`openapi/ably-auth-rest.yaml`](openapi/ably-auth-rest.yaml) (platform token
+  issuance/revocation + server time)
 - OpenAPI version: **3.0.3** (broadest Rust generator support)
 - Validated with: `@redocly/cli lint` ✅
 
@@ -128,14 +130,15 @@ This repo is a two-crate Cargo workspace
 | ----- | ----------- | ---- |
 | [`crates/ably-chat-rs`](crates/ably-chat-rs) | `ably_chat` | **Start here.** Hand-written, ergonomic, forward-compatible client. |
 | [`crates/ably-chat-openapi`](crates/ably-chat-openapi) | `ably_chat_openapi` | Generated OpenAPI bindings; re-exported as `ably_chat::raw` (escape hatch). |
+| [`crates/ably-auth-openapi`](crates/ably-auth-openapi) | `ably_auth_openapi` | Generated bindings for the platform token endpoints (`/keys/.../requestToken`, `/keys/.../revokeTokens`, `/time`). |
 
-Both are unofficial and dual-licensed `MIT OR Apache-2.0`. Most users depend on
+All three crates are unofficial and dual-licensed `MIT OR Apache-2.0`. Most users depend on
 `ably-chat-rs`; see its [crate README](crates/ably-chat-rs/README.md) for
 install and usage.
 
-The `ably-chat-openapi` `src/` is regenerated from
-`openapi/ably-chat-rest.yaml` and **must not be hand-edited** (a CI codegen gate
-diffs it against a fresh regeneration). It was produced with:
+The generated crates' `src/` is regenerated from their specs and **must not be
+hand-edited** (a CI codegen gate diffs each against a fresh regeneration). They
+were produced with:
 
 ```bash
 npx @openapitools/openapi-generator-cli generate \
@@ -143,6 +146,12 @@ npx @openapitools/openapi-generator-cli generate \
   -g rust \
   -o crates/ably-chat-openapi \
   --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+
+npx @openapitools/openapi-generator-cli generate \
+  -i openapi/ably-auth-rest.yaml \
+  -g rust \
+  -o crates/ably-auth-openapi \
+  --additional-properties=packageName=ably-auth-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
 ```
 
 The ergonomic wrapper layered over this generated crate is designed in

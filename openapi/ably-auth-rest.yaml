@@ -1,0 +1,432 @@
+openapi: 3.0.3
+info:
+  title: Ably Platform Auth REST API
+  version: "1.0.0"
+  description: >
+    The subset of the Ably **platform** REST API used for authentication and
+    token lifecycle: requesting Ably Tokens, revoking them, and reading server
+    time. This is a *separate* API from the Ably Chat REST API
+    (`openapi/ably-chat-rest.yaml`, path prefix `/chat/v4`) — token issuance and
+    revocation live on the platform host under `/keys/...`, not under `/chat/*`.
+
+
+    ## Scope & provenance
+
+    Ably publishes an authoritative platform spec,
+    [`ably/open-specs`](https://github.com/ably/open-specs) `platform-v1.yaml`,
+    which covers the full generic pub/sub REST API (`/channels`, `/push`,
+    `/keys`, `/stats`, `/time`). **This document is deliberately narrow**: it
+    models only the endpoints this project's authentication story
+    ([ADR-0012](../docs/adr/0012-token-issuance-permissions.md),
+    [SPEC §13](../docs/SPEC.md)) touches — `POST /keys/{keyName}/requestToken`,
+    `POST /keys/{keyName}/revokeTokens`, and `GET /time`. Field-level details are
+    cross-checked against `platform-v1.yaml`, the Ably auth docs, and the
+    `ably-js` auth implementation (see
+    [`../docs/research/2026-07-24-ably-chat-auth-permissions.md`](../docs/research/2026-07-24-ably-chat-auth-permissions.md)).
+
+
+    ## Relationship to the Chat client
+
+    `ably-chat-rs` is a Chat REST client; it does not itself sign TokenRequests
+    or call `/keys/...` (ADR-0012 Tier 4). This spec documents the platform
+    endpoints a *token server* (or the official `ably` crate) uses to mint the
+    Bearer credentials that are then handed to the Chat client. Capability
+    documents carried by these tokens are described in SPEC §13, not here.
+  license:
+    name: MIT OR Apache-2.0
+
+servers:
+  - url: https://{host}
+    description: Ably REST endpoint
+    variables:
+      host:
+        default: rest.ably.io
+        description: >
+          Ably REST host. `rest.ably.io` is the primary global endpoint.
+          Fallback/routing hosts (e.g. `main.realtime.ably.net`,
+          `[a-e].ably-realtime.com`) and dedicated/regional environment hosts
+          may be used depending on your account configuration.
+
+# Default: Basic auth with an API key. Individual operations relax or tighten
+# this (a signed TokenRequest needs no auth; `/time` needs none).
+security:
+  - basicKey: []
+  - bearerToken: []
+
+tags:
+  - name: Authentication
+    description: Request and revoke Ably Tokens.
+  - name: Utilities
+    description: Server time and other helpers used by the auth flow.
+
+paths:
+  /keys/{keyName}/requestToken:
+    post:
+      operationId: requestToken
+      tags:
+        - Authentication
+      summary: Request an Ably Token
+      description: >
+        Exchange a token request for an Ably Token (`TokenDetails`). Two request
+        forms are accepted:
+
+
+        - A **signed** `TokenRequest` (carries a `mac` computed with the API key
+          secret). No `Authorization` header is required — the `mac` is the
+          credential. This is how an untrusted client redeems a request its
+          server signed.
+
+        - An **unsigned** `TokenParams` body. Requires HTTP Basic authentication
+          with the API key; Ably signs the token server-side.
+
+
+        The effective capability of the returned token is the intersection of
+        the requested capability and the issuing key's own capability; an empty
+        intersection fails the request.
+      parameters:
+        - $ref: '#/components/parameters/KeyName'
+        - $ref: '#/components/parameters/AblyVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/TokenRequest'
+                - $ref: '#/components/schemas/TokenParams'
+      security:
+        - basicKey: []
+        - {}
+      responses:
+        "200":
+          description: The issued Ably Token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDetails'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /keys/{keyName}/revokeTokens:
+    post:
+      operationId: revokeTokens
+      tags:
+        - Authentication
+      summary: Revoke issued tokens
+      description: >
+        Revoke tokens previously issued from this API key. The key MUST have had
+        **revocable tokens** enabled before the tokens were issued. Requires HTTP
+        Basic authentication with the API key — a client authenticated with a
+        token (rather than the key) is rejected with Ably error `40162`.
+
+
+        Targets are specified as `type:value` strings — `clientId:<id>`,
+        `revocationKey:<value>` (matches the `x-ably-revocation-key` JWT claim),
+        or `channel:<name>`. `issuedBefore` scopes revocation to tokens issued
+        before a timestamp; `allowReauthMargin` postpones enforcement ~30s and
+        hints live connections to re-authenticate first.
+      parameters:
+        - $ref: '#/components/parameters/KeyName'
+        - $ref: '#/components/parameters/AblyVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRevocationRequest'
+      security:
+        - basicKey: []
+      responses:
+        "201":
+          description: The revocation was accepted; per-target results are returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRevocationResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /time:
+    get:
+      operationId: getTime
+      tags:
+        - Utilities
+      summary: Get the Ably service time
+      description: >
+        Returns the current Ably service time as a single-element JSON array of
+        milliseconds since the Unix epoch. Used to compute a local clock offset
+        so signed `TokenRequest` timestamps fall within the server's acceptance
+        window (~2 minutes). No authentication required.
+      parameters:
+        - $ref: '#/components/parameters/AblyVersion'
+      security:
+        - {}
+      responses:
+        "200":
+          description: A one-element array holding the server time in epoch milliseconds.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerTime'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+
+components:
+  securitySchemes:
+    basicKey:
+      type: http
+      scheme: basic
+      description: >
+        HTTP Basic authentication using an Ably API key. The key name is the
+        username and the key secret is the password (i.e.
+        `Authorization: Basic base64(keyName:keySecret)`).
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: >
+        Bearer authentication using an Ably Token, Ably JWT, or an external JWT
+        containing an embedded Ably token.
+
+  parameters:
+    KeyName:
+      name: keyName
+      in: path
+      required: true
+      description: >
+        The API key name, i.e. the `appId.keyId` portion of a full key
+        (`appId.keyId:keySecret`) up to the first `:`. Sent URL-encoded.
+      schema:
+        type: string
+      example: "appId.keyId"
+    AblyVersion:
+      name: X-Ably-Version
+      in: header
+      required: false
+      description: >
+        The Ably REST API version. Optional; may alternatively be supplied as
+        the `?v=` query parameter. When omitted, Ably applies its current
+        default.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request was malformed or contained invalid arguments.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or the credentials lack permission.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    Capability:
+      type: string
+      description: >
+        A capability document as a JSON **string** (a stringified object mapping
+        resource-name patterns to arrays of operations, e.g.
+        `{"my-room":["publish","history"]}`). For a signed `TokenRequest` this
+        string must be canonicalized (resource keys and operation arrays sorted,
+        no whitespace) because it is part of the HMAC-signed text. See SPEC §13.
+      example: '{"my-room":["history","publish"]}'
+
+    TokenParams:
+      type: object
+      description: >
+        An **unsigned** token request. Sent with HTTP Basic auth; Ably signs the
+        token server-side. To request all of the key's capabilities, omit
+        `capability`.
+      properties:
+        ttl:
+          type: integer
+          format: int64
+          description: >
+            Requested time-to-live in milliseconds. Defaults to 3600000 (1 hour)
+            when omitted. Tokens from a revocable-tokens key are capped at 1 hour.
+          example: 3600000
+        capability:
+          $ref: '#/components/schemas/Capability'
+        clientId:
+          type: string
+          description: >
+            The identity to bind the token to. The resulting token may only act
+            as this `clientId`; `*` grants the privileged wildcard identity.
+          example: "user-123"
+
+    TokenRequest:
+      type: object
+      description: >
+        A **signed** token request. The `mac` is HMAC-SHA256 (base64) over the
+        newline-joined fields `keyName`, `ttl`, `capability`, `clientId`,
+        `timestamp`, `nonce` (each followed by a newline, empty fields included)
+        using the API key secret. A signed request needs no `Authorization`
+        header.
+      required:
+        - keyName
+        - timestamp
+        - nonce
+        - mac
+      properties:
+        keyName:
+          type: string
+          description: The API key name (`appId.keyId`) that signed this request.
+          example: "appId.keyId"
+        ttl:
+          type: integer
+          format: int64
+          description: Requested time-to-live in milliseconds.
+          example: 3600000
+        capability:
+          $ref: '#/components/schemas/Capability'
+        clientId:
+          type: string
+          description: The identity to bind the token to.
+          example: "user-123"
+        timestamp:
+          type: integer
+          format: int64
+          description: >
+            Milliseconds since the Unix epoch when the request was created. Must
+            be within ~2 minutes of Ably server time (see `GET /time`).
+        nonce:
+          type: string
+          description: >
+            An opaque, cryptographically-random string of at least 16 characters,
+            unique per request (replay protection).
+          example: "0123456789abcdef"
+        mac:
+          type: string
+          description: Base64 HMAC-SHA256 signature over the canonical request text.
+
+    TokenDetails:
+      type: object
+      description: An issued Ably Token. The `token` string is presented as a Bearer credential.
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: "The token string, sent as `Authorization: Bearer <token>`."
+        keyName:
+          type: string
+          description: The API key name the token was issued from.
+          example: "appId.keyId"
+        issued:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch at which the token was issued.
+        expires:
+          type: integer
+          format: int64
+          description: Milliseconds since the Unix epoch at which the token expires.
+        capability:
+          $ref: '#/components/schemas/Capability'
+        clientId:
+          type: string
+          description: The identity bound to the token, if any.
+          example: "user-123"
+
+    TokenRevocationRequest:
+      type: object
+      description: A request to revoke previously-issued tokens.
+      required:
+        - targets
+      properties:
+        targets:
+          type: array
+          description: >
+            Up to 100 target specifiers, each a `type:value` string where `type`
+            is `clientId`, `revocationKey`, or `channel`.
+          maxItems: 100
+          items:
+            type: string
+          example:
+            - "clientId:user-123"
+            - "revocationKey:group-7"
+        issuedBefore:
+          type: integer
+          format: int64
+          description: >
+            Only tokens issued before this timestamp (epoch milliseconds) are
+            revoked. Defaults to the current time when omitted.
+        allowReauthMargin:
+          type: boolean
+          default: false
+          description: >
+            When true, enforcement is postponed ~30 seconds and live connections
+            are hinted to obtain a fresh token, avoiding an abrupt disconnect.
+
+    TokenRevocationResponse:
+      type: object
+      description: Per-target results of a revocation request.
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              target:
+                type: string
+                description: The target specifier this result is for.
+              appliesAt:
+                type: integer
+                format: int64
+                description: >
+                  Milliseconds since the Unix epoch at which the revocation takes
+                  effect (now, or ~now+30s when `allowReauthMargin` was set).
+              issuedBefore:
+                type: integer
+                format: int64
+                description: The effective `issuedBefore` cutoff applied for this target.
+              error:
+                $ref: '#/components/schemas/ErrorInfo'
+
+    ServerTime:
+      type: array
+      description: A one-element array holding the server time in epoch milliseconds.
+      minItems: 1
+      maxItems: 1
+      items:
+        type: integer
+        format: int64
+      example:
+        - 1726585978590
+
+    ErrorResponse:
+      type: object
+      description: Ably standard error envelope.
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+
+    ErrorInfo:
+      type: object
+      required:
+        - code
+        - message
+        - statusCode
+      properties:
+        code:
+          type: integer
+          description: Ably-specific error code.
+          example: 40142
+        message:
+          type: string
+          description: Human-readable error message.
+        statusCode:
+          type: integer
+          description: HTTP status code.
+          example: 401
+        href:
+          type: string
+          description: URL to Ably documentation for this error code.

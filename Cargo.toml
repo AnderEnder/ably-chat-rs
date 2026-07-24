@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/ably-chat-rs", "crates/ably-chat-openapi"]
+members = ["crates/ably-chat-rs", "crates/ably-chat-openapi", "crates/ably-auth-openapi"]
 
 [workspace.package]
 version = "0.1.0"

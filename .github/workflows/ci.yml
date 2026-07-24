@@ -86,6 +86,13 @@ jobs:
             -o /tmp/gen \
             --additional-properties=packageName=ably-chat-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
           diff -ru crates/ably-chat-openapi/src /tmp/gen/src
+          # The platform-auth bindings are generated the same way from a separate spec.
+          npx --yes @openapitools/openapi-generator-cli generate \
+            -i openapi/ably-auth-rest.yaml \
+            -g rust \
+            -o /tmp/gen-auth \
+            --additional-properties=packageName=ably-auth-openapi,packageVersion=0.1.0,supportAsync=true,library=reqwest
+          diff -ru crates/ably-auth-openapi/src /tmp/gen-auth/src
 
   # Build + test on every supported target. Suite is self-contained (wiremock, no
   # external services), so the full workspace runs on each. Linux + macOS native
