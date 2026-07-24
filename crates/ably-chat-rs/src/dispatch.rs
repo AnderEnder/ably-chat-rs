@@ -124,6 +124,10 @@ impl crate::client::Inner {
                     let err = Error::from_api_body(status, &bytes);
                     // Provider-backed token error: refresh once and retry the
                     // request once (spec RSA4b — exactly one extra attempt).
+                    // Deliberately NOT gated on `eligible` (ADR-0006): a 401
+                    // means the request was rejected by the auth layer before
+                    // it could have any side effect, so retrying it — even a
+                    // non-idempotent POST — is always safe.
                     if !auth_refreshed
                         && err.is_token_error()
                         && matches!(&self.auth, crate::client::AuthState::Provider { .. })
