@@ -113,6 +113,12 @@ impl Error {
     pub fn is_rejected_by_moderation(&self) -> bool {
         matches!(self, Error::Api { info, .. } if info.code == 42213)
     }
+
+    /// Whether this is an Ably token error (HTTP `401`, code in `[40140, 40150)`)
+    /// that a configured `TokenProvider` should renew on (spec RSA4b).
+    pub fn is_token_error(&self) -> bool {
+        matches!(self, Error::Api { status: 401, info } if (40140..40150).contains(&info.code))
+    }
 }
 
 #[cfg(test)]
@@ -146,6 +152,31 @@ mod tests {
         assert_eq!(e.status(), Some(500));
         assert!(e.is_retryable());
         assert_eq!(e.info().map(|i| i.message.as_str()), Some("upstream boom"));
+    }
+
+    #[test]
+    fn token_error_range() {
+        // 401 + code in [40140,40150) -> token error (renewable).
+        for code in [40140, 40141, 40142, 40143, 40149] {
+            let body = format!(r#"{{"error":{{"code":{code},"message":"x","statusCode":401}}}}"#);
+            assert!(
+                Error::from_api_body(401, body.as_bytes()).is_token_error(),
+                "code {code}"
+            );
+        }
+        // Not a token error: wrong status, or code outside the range.
+        assert!(
+            !Error::from_api_body(403, br#"{"error":{"code":40140,"statusCode":403}}"#)
+                .is_token_error()
+        );
+        assert!(
+            !Error::from_api_body(401, br#"{"error":{"code":40150,"statusCode":401}}"#)
+                .is_token_error()
+        );
+        assert!(
+            !Error::from_api_body(401, br#"{"error":{"code":40400,"statusCode":401}}"#)
+                .is_token_error()
+        );
     }
 
     #[test]
