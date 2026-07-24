@@ -49,6 +49,11 @@
 //! and let the client refresh Bearer credentials automatically by building
 //! [`Auth`] with [`Auth::provider`] instead of a static token (ADR-0012,
 //! SPEC §13).
+//!
+//! Prefer not to sign requests yourself? `KeyTokenProvider` (feature
+//! `token-issuance`, off by default) mints Ably Tokens through the platform
+//! `requestToken` endpoint instead — also **server-side only**. Pair it with
+//! [`Auth::provider`] the same way (ADR-0012 item 5, SPEC §13).
 
 /// Low-level generated bindings. Escape hatch; NOT covered by the pre-1.0
 /// stability guarantee and may change on regeneration.

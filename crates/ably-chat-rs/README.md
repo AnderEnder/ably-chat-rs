@@ -82,6 +82,11 @@ client refresh Bearer credentials automatically by building `Auth` with
 [ADR-0012](../../docs/adr/0012-token-issuance-permissions.md) and
 [SPEC §13](../../docs/SPEC.md).
 
+Prefer not to sign requests yourself? `KeyTokenProvider` (feature
+`token-issuance`, off by default) mints Ably Tokens through the platform
+`requestToken` endpoint instead — also **server-side only**. Pair it with
+`Auth::provider` the same way.
+
 ## Cargo features
 
 All features are additive.
@@ -93,6 +98,7 @@ All features are additive.
 | `chrono`       | no      | `Timestamp::to_chrono()` conversion to `chrono::DateTime`. |
 | `capabilities` | yes     | Typed `Capability` builder for capability documents.       |
 | `jwt`          | yes     | `mint_ably_jwt` — Ably JWT minting, server-side only.       |
+| `token-issuance` | no    | `KeyTokenProvider` — mints Ably Tokens via `requestToken`, server-side only. |
 
 ## Low-level escape hatch: `ably_chat::raw`
 
