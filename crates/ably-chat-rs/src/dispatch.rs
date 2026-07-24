@@ -86,11 +86,12 @@ impl crate::client::Inner {
         let eligible = Self::retry_eligible(&method, has_idem);
         let mut attempt = 0;
         loop {
+            let auth = self.auth_header(false).await?;
             let mut req = self
                 .http
                 .request(method.clone(), &url)
                 .header("X-Ably-Version", "4")
-                .header(reqwest::header::AUTHORIZATION, self.auth_header.as_str());
+                .header(reqwest::header::AUTHORIZATION, &auth);
             if !query.is_empty() {
                 req = req.query(query);
             }

@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::config::Auth;
+use futures::lock::Mutex;
+
+use crate::config::{Auth, TokenProvider};
+use crate::error::Result;
 
 /// The entry point to the Ably Chat REST API.
 ///
@@ -18,9 +21,40 @@ pub(crate) struct Inner {
     pub(crate) http: reqwest::Client,
     /// Base host with any trailing slash trimmed, e.g. `https://rest.ably.io`.
     pub(crate) base: String,
-    /// Prebuilt `Authorization` header value.
-    pub(crate) auth_header: String,
+    /// Resolved auth: a fixed header, or a provider + cached header.
+    pub(crate) auth: AuthState,
     pub(crate) max_retries: u32,
+}
+
+/// Resolved auth: a fixed header for static creds, or a provider + cached header.
+pub(crate) enum AuthState {
+    Static(String),
+    Provider {
+        provider: Arc<dyn TokenProvider>,
+        cache: Mutex<Option<String>>,
+    },
+}
+
+impl Inner {
+    /// The `Authorization` header value. For a provider, returns the cached
+    /// header, fetching (once, single-flighted) when empty or `force` is set.
+    pub(crate) async fn auth_header(&self, force: bool) -> Result<String> {
+        match &self.auth {
+            AuthState::Static(h) => Ok(h.clone()),
+            AuthState::Provider { provider, cache } => {
+                let mut guard = cache.lock().await; // brief; not held during the HTTP send
+                if force {
+                    *guard = None;
+                }
+                if let Some(h) = guard.as_ref() {
+                    return Ok(h.clone());
+                }
+                let header = format!("Bearer {}", provider.token().await?);
+                *guard = Some(header.clone());
+                Ok(header)
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for Client {
@@ -109,11 +143,18 @@ impl ClientBuilder {
             }
             b.build().expect("failed to build reqwest client")
         });
+        let auth = match self.auth {
+            Auth::Provider(p) => AuthState::Provider {
+                provider: p,
+                cache: Mutex::new(None),
+            },
+            a @ (Auth::ApiKey(_) | Auth::Token(_)) => AuthState::Static(a.header_value()),
+        };
         Client {
             inner: Arc::new(Inner {
                 http,
                 base: self.host.trim_end_matches('/').to_string(),
-                auth_header: self.auth.header_value(),
+                auth,
                 max_retries: self.max_retries,
             }),
         }
@@ -141,5 +182,40 @@ mod tests {
             .host("https://example.test/")
             .build();
         assert_eq!(client.inner.base, "https://example.test");
+    }
+
+    #[tokio::test]
+    async fn provider_auth_header_resolves_and_caches() {
+        use crate::config::TokenProvider;
+        use futures::future::BoxFuture;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Counting(Arc<AtomicUsize>);
+        impl TokenProvider for Counting {
+            fn token(&self) -> BoxFuture<'_, crate::error::Result<String>> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async { Ok("tok-1".to_string()) })
+            }
+        }
+        let calls = Arc::new(AtomicUsize::new(0));
+        let client = Client::builder(crate::config::Auth::provider(Arc::new(Counting(
+            calls.clone(),
+        ))))
+        .build();
+
+        let h1 = client.inner.auth_header(false).await.unwrap();
+        let h2 = client.inner.auth_header(false).await.unwrap();
+        assert_eq!(h1, "Bearer tok-1");
+        assert_eq!(h2, "Bearer tok-1");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "second call served from cache"
+        );
+
+        // force refresh re-fetches
+        client.inner.auth_header(true).await.unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }
