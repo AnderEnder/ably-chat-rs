@@ -4,9 +4,10 @@
 
 use std::time::Duration;
 
-use crate::error::{Error, Result};
+use futures::future::BoxFuture;
 
-// `BoxFuture`/`TokenProvider` land with the `TokenProvider` impl in Task 4.3.
+use crate::config::TokenProvider;
+use crate::error::{Error, Result};
 
 /// Mints Ably Tokens by calling `POST /keys/{keyName}/requestToken` with an
 /// unsigned `TokenParams` body under HTTP Basic auth. Pair with
@@ -14,8 +15,6 @@ use crate::error::{Error, Result};
 #[derive(Clone)]
 pub struct KeyTokenProvider {
     key_name: String,
-    // Not read until the `TokenProvider` impl lands in Task 4.3.
-    #[allow(dead_code)]
     key_secret: String,
     host: String,
     capability: Option<String>,
@@ -85,6 +84,48 @@ impl std::fmt::Debug for KeyTokenProvider {
     }
 }
 
+use ably_auth_openapi::apis::authentication_api;
+use ably_auth_openapi::apis::configuration::Configuration;
+use ably_auth_openapi::models::{RequestTokenRequest, TokenParams};
+
+impl TokenProvider for KeyTokenProvider {
+    fn token(&self) -> BoxFuture<'_, Result<String>> {
+        Box::pin(async move {
+            let mut cfg = Configuration::new();
+            cfg.base_path = self.host.clone();
+            cfg.client = self.http.clone();
+            cfg.basic_auth = Some((self.key_name.clone(), Some(self.key_secret.clone())));
+
+            let params = TokenParams {
+                ttl: self.ttl.map(|d| d.as_millis() as i64),
+                capability: self.capability.clone(),
+                client_id: self.client_id.clone(),
+            };
+            let body = RequestTokenRequest::TokenParams(Box::new(params));
+
+            // x-ably-version omitted (None): the platform API applies its default.
+            match authentication_api::request_token(&cfg, &self.key_name, body, None).await {
+                Ok(details) => Ok(details.token),
+                Err(e) => Err(map_auth_error(e)),
+            }
+        })
+    }
+}
+
+/// Maps an `ably-auth-openapi` error into this crate's `Error`.
+fn map_auth_error(
+    e: ably_auth_openapi::apis::Error<authentication_api::RequestTokenError>,
+) -> Error {
+    use ably_auth_openapi::apis::Error as AuthErr;
+    match e {
+        AuthErr::Reqwest(re) => Error::from(re), // -> Error::Transport
+        AuthErr::ResponseError(rc) => {
+            Error::from_api_body(rc.status.as_u16(), rc.content.as_bytes())
+        }
+        other => Error::Decode(other.to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,5 +147,42 @@ mod tests {
     #[test]
     fn rejects_malformed_key() {
         assert!(KeyTokenProvider::new("no-colon").is_err());
+    }
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn mints_token_via_request_token() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/keys/app.key/requestToken"))
+            .respond_with(ResponseTemplate::new(200).set_body_raw(
+                r#"{"token":"tok-XYZ","keyName":"app.key"}"#,
+                "application/json",
+            ))
+            .mount(&server)
+            .await;
+        let p = KeyTokenProvider::new("app.key:secret")
+            .unwrap()
+            .host(server.uri());
+        assert_eq!(p.token().await.unwrap(), "tok-XYZ");
+    }
+
+    #[tokio::test]
+    async fn maps_request_token_api_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/keys/app.key/requestToken"))
+            .respond_with(ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"code":40100,"message":"bad key","statusCode":401}}"#,
+            ))
+            .mount(&server)
+            .await;
+        let p = KeyTokenProvider::new("app.key:secret")
+            .unwrap()
+            .host(server.uri());
+        let err = p.token().await.unwrap_err();
+        assert_eq!(err.status(), Some(401));
     }
 }
