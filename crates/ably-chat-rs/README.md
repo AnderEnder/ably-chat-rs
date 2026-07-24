@@ -72,15 +72,27 @@ The ten REST operations of the Ably Chat REST API:
   exists the first time a client uses it. There is no create-room / delete-room
   operation and this crate does not expose one.
 
+## Permissions & token issuance
+
+Build the capability string for a TokenRequest or JWT with `Capability`
+(feature `capabilities`), mint the JWT itself with `mint_ably_jwt` (feature
+`jwt`; **server-side only** — it signs with your API secret), and let the
+client refresh Bearer credentials automatically by building `Auth` with
+`Auth::provider` instead of a static token. See
+[ADR-0012](../../docs/adr/0012-token-issuance-permissions.md) and
+[SPEC §13](../../docs/SPEC.md).
+
 ## Cargo features
 
 All features are additive.
 
-| Feature      | Default | Effect                                                   |
-| ------------ | ------- | -------------------------------------------------------- |
-| `rustls`     | yes     | TLS via `rustls` (Rust; aws-lc-rs + platform verifier).  |
-| `native-tls` | no      | TLS via the system's native library (OpenSSL/SChannel).  |
-| `chrono`     | no      | `Timestamp::to_chrono()` conversion to `chrono::DateTime`.|
+| Feature        | Default | Effect                                                     |
+| -------------- | ------- | ----------------------------------------------------------- |
+| `rustls`       | yes     | TLS via `rustls` (Rust; aws-lc-rs + platform verifier).    |
+| `native-tls`   | no      | TLS via the system's native library (OpenSSL/SChannel).    |
+| `chrono`       | no      | `Timestamp::to_chrono()` conversion to `chrono::DateTime`. |
+| `capabilities` | yes     | Typed `Capability` builder for capability documents.       |
+| `jwt`          | yes     | `mint_ably_jwt` — Ably JWT minting, server-side only.       |
 
 ## Low-level escape hatch: `ably_chat::raw`
 

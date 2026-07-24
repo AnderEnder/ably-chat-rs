@@ -40,6 +40,15 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! # Permissions & token issuance
+//!
+//! Build the capability string for a TokenRequest or JWT with
+//! [`Capability`] (feature `capabilities`), mint the JWT itself with
+//! [`mint_ably_jwt`] (feature `jwt`; **server-side only** — it signs with
+//! your API secret), and let the client refresh Bearer credentials
+//! automatically by building [`Auth`] with [`Auth::provider`] instead of a
+//! static token (ADR-0012, SPEC §13).
 
 /// Low-level generated bindings. Escape hatch; NOT covered by the pre-1.0
 /// stability guarantee and may change on regeneration.
