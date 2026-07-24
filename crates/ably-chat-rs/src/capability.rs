@@ -100,6 +100,12 @@ impl Capability {
     pub fn for_room(self, room: &str, ops: impl IntoIterator<Item = Operation>) -> Self {
         self.allow(room.to_owned(), ops)
     }
+
+    /// The capability as a native JSON object (not a stringified value), for the
+    /// Ably Control API key `capability` field (ADR-0012 §A2.5).
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::to_value(&self.0).expect("capability map is always serializable")
+    }
 }
 
 #[cfg(test)]
@@ -147,5 +153,13 @@ mod tests {
             cap.to_capability_string(),
             r#"{"sports":["history","publish"]}"#
         );
+    }
+
+    #[test]
+    fn to_json_returns_native_object() {
+        let cap = Capability::new().allow("r", [Operation::Publish, Operation::History]);
+        let v = cap.to_json();
+        assert!(v.is_object());
+        assert_eq!(v["r"], serde_json::json!(["history", "publish"]));
     }
 }
