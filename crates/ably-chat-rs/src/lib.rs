@@ -64,6 +64,11 @@ mod capability;
 #[cfg(feature = "capabilities")]
 pub use capability::{Capability, Operation};
 
+#[cfg(feature = "jwt")]
+mod jwt;
+#[cfg(feature = "jwt")]
+pub use jwt::{SigningKey, TokenParams, mint_ably_jwt};
+
 mod client;
 pub use client::{Client, ClientBuilder};
 
