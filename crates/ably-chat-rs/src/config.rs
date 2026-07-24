@@ -73,6 +73,24 @@ impl std::fmt::Debug for Auth {
     }
 }
 
+/// Splits a full Ably API key `appId.keyId:keySecret` into its name and secret.
+///
+/// Shared by the `jwt` and `token-issuance` features, which both need the halves
+/// separately (the key name serves as the JWT `kid` / HTTP Basic username, the
+/// secret as the signing key / Basic password).
+#[cfg(any(feature = "jwt", feature = "token-issuance"))]
+pub(crate) fn split_api_key(api_key: &str) -> crate::error::Result<(&str, &str)> {
+    let (name, secret) = api_key.split_once(':').ok_or_else(|| {
+        crate::error::Error::InvalidRequest("API key must be `keyName:keySecret`".into())
+    })?;
+    if name.is_empty() || secret.is_empty() {
+        return Err(crate::error::Error::InvalidRequest(
+            "API key name and secret must be non-empty".into(),
+        ));
+    }
+    Ok((name, secret))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

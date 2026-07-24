@@ -14,15 +14,7 @@ pub struct SigningKey {
 impl SigningKey {
     /// Parse a full API key `appId.keyId:keySecret`.
     pub fn new(api_key: impl AsRef<str>) -> Result<Self> {
-        let s = api_key.as_ref();
-        let (name, secret) = s
-            .split_once(':')
-            .ok_or_else(|| Error::InvalidRequest("API key must be `keyName:keySecret`".into()))?;
-        if name.is_empty() || secret.is_empty() {
-            return Err(Error::InvalidRequest(
-                "API key name and secret must be non-empty".into(),
-            ));
-        }
+        let (name, secret) = crate::config::split_api_key(api_key.as_ref())?;
         Ok(Self {
             name: name.to_owned(),
             secret: secret.to_owned(),

@@ -14,8 +14,8 @@ use crate::error::{Error, Result};
 /// [`Auth::provider`](crate::Auth::provider) for automatic use + refresh.
 #[derive(Clone)]
 pub struct KeyTokenProvider {
-    key_name: String,
-    key_secret: String,
+    name: String,
+    secret: String,
     host: String,
     capability: Option<String>,
     client_id: Option<String>,
@@ -26,18 +26,10 @@ pub struct KeyTokenProvider {
 impl KeyTokenProvider {
     /// New provider from a full API key `appId.keyId:keySecret`.
     pub fn new(api_key: impl AsRef<str>) -> Result<Self> {
-        let s = api_key.as_ref();
-        let (name, secret) = s
-            .split_once(':')
-            .ok_or_else(|| Error::InvalidRequest("API key must be `keyName:keySecret`".into()))?;
-        if name.is_empty() || secret.is_empty() {
-            return Err(Error::InvalidRequest(
-                "API key name and secret must be non-empty".into(),
-            ));
-        }
+        let (name, secret) = crate::config::split_api_key(api_key.as_ref())?;
         Ok(Self {
-            key_name: name.to_owned(),
-            key_secret: secret.to_owned(),
+            name: name.to_owned(),
+            secret: secret.to_owned(),
             host: "https://rest.ably.io".to_owned(),
             capability: None,
             client_id: None,
@@ -76,7 +68,7 @@ impl KeyTokenProvider {
 impl std::fmt::Debug for KeyTokenProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("KeyTokenProvider")
-            .field("key_name", &self.key_name)
+            .field("key_name", &self.name)
             .field("key_secret", &"<redacted>")
             .field("host", &self.host)
             .field("client_id", &self.client_id)
@@ -94,7 +86,7 @@ impl TokenProvider for KeyTokenProvider {
             let mut cfg = Configuration::new();
             cfg.base_path = self.host.clone();
             cfg.client = self.http.clone();
-            cfg.basic_auth = Some((self.key_name.clone(), Some(self.key_secret.clone())));
+            cfg.basic_auth = Some((self.name.clone(), Some(self.secret.clone())));
 
             let params = TokenParams {
                 ttl: self.ttl.map(|d| d.as_millis() as i64),
@@ -104,7 +96,7 @@ impl TokenProvider for KeyTokenProvider {
             let body = RequestTokenRequest::TokenParams(Box::new(params));
 
             // x-ably-version omitted (None): the platform API applies its default.
-            match authentication_api::request_token(&cfg, &self.key_name, body, None).await {
+            match authentication_api::request_token(&cfg, &self.name, body, None).await {
                 Ok(details) => Ok(details.token),
                 Err(e) => Err(map_auth_error(e)),
             }
