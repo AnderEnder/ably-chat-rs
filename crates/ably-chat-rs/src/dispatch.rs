@@ -87,7 +87,7 @@ impl crate::client::Inner {
         let mut attempt = 0;
         let mut auth_refreshed = false;
         loop {
-            let auth = self.auth_header(false).await?;
+            let auth = self.auth_header(None).await?;
             let mut req = self
                 .http
                 .request(method.clone(), &url)
@@ -129,7 +129,9 @@ impl crate::client::Inner {
                         && matches!(&self.auth, crate::client::AuthState::Provider { .. })
                     {
                         auth_refreshed = true;
-                        self.auth_header(true).await?; // force refresh; propagate provider errors
+                        // Refresh only if the cache still holds the value that
+                        // was just rejected; propagate provider errors.
+                        self.auth_header(Some(auth.as_str())).await?;
                         continue;
                     }
                     return Err(err);

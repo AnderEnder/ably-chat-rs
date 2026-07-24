@@ -37,17 +37,31 @@ pub(crate) enum AuthState {
 
 impl Inner {
     /// The `Authorization` header value. For a provider, returns the cached
-    /// header, fetching (once, single-flighted) when empty or `force` is set.
-    pub(crate) async fn auth_header(&self, force: bool) -> Result<String> {
+    /// header. The provider is called only when nothing is cached yet, or
+    /// when `stale` names the exact header value that a caller just had
+    /// rejected: if another task already refreshed the cache since then, its
+    /// value is reused instead of minting a redundant token.
+    ///
+    /// `stale`: `None` for a normal request (use whatever is cached, or fetch
+    /// if empty); `Some(header)` when retrying after `header` was rejected as
+    /// a token error.
+    pub(crate) async fn auth_header(&self, stale: Option<&str>) -> Result<String> {
         match &self.auth {
             AuthState::Static(h) => Ok(h.clone()),
             AuthState::Provider { provider, cache } => {
-                let mut guard = cache.lock().await; // brief; not held during the HTTP send
-                if force {
-                    *guard = None;
-                }
-                if let Some(h) = guard.as_ref() {
-                    return Ok(h.clone());
+                // The mutex is deliberately held across `provider.token()`
+                // below (not just this cache read): that is what makes
+                // concurrent refreshes single-flighted. The first caller to
+                // take the lock fetches and caches; every other caller that
+                // arrives while the fetch is in flight blocks here, then
+                // observes the freshly cached value and reuses it. The guard
+                // is released long before the outbound HTTP send, which
+                // happens in `dispatch::send_url` after this returns.
+                let mut guard = cache.lock().await;
+                if let Some(cached) = guard.as_ref()
+                    && stale != Some(cached.as_str())
+                {
+                    return Ok(cached.clone());
                 }
                 let header = format!("Bearer {}", provider.token().await?);
                 *guard = Some(header.clone());
@@ -204,8 +218,8 @@ mod tests {
         ))))
         .build();
 
-        let h1 = client.inner.auth_header(false).await.unwrap();
-        let h2 = client.inner.auth_header(false).await.unwrap();
+        let h1 = client.inner.auth_header(None).await.unwrap();
+        let h2 = client.inner.auth_header(None).await.unwrap();
         assert_eq!(h1, "Bearer tok-1");
         assert_eq!(h2, "Bearer tok-1");
         assert_eq!(
@@ -214,8 +228,51 @@ mod tests {
             "second call served from cache"
         );
 
-        // force refresh re-fetches
-        client.inner.auth_header(true).await.unwrap();
+        // forced refresh of the (still-current) cached value re-fetches
+        client
+            .inner
+            .auth_header(Some("Bearer tok-1"))
+            .await
+            .unwrap();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn forced_refresh_is_single_flighted() {
+        use crate::config::TokenProvider;
+        use futures::future::BoxFuture;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Rotating(Arc<AtomicUsize>);
+        impl TokenProvider for Rotating {
+            fn token(&self) -> BoxFuture<'_, crate::error::Result<String>> {
+                let n = self.0.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { Ok(format!("t{}", n + 1)) })
+            }
+        }
+        let calls = Arc::new(AtomicUsize::new(0));
+        let client = Client::builder(crate::config::Auth::provider(Arc::new(Rotating(
+            calls.clone(),
+        ))))
+        .build();
+
+        let first = client.inner.auth_header(None).await.unwrap();
+        assert_eq!(first, "Bearer t1");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        // Two requests concurrently discover the same stale token: exactly ONE refresh.
+        let (a, b) = futures::join!(
+            client.inner.auth_header(Some("Bearer t1")),
+            client.inner.auth_header(Some("Bearer t1")),
+        );
+        let (a, b) = (a.unwrap(), b.unwrap());
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "second caller must reuse the refreshed token"
+        );
+        assert_eq!(a, "Bearer t2");
+        assert_eq!(b, "Bearer t2");
     }
 }

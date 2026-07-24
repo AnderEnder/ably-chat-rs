@@ -10,6 +10,10 @@ use crate::error::Result;
 /// Supplies a currently-valid Bearer credential (Ably Token string or Ably JWT),
 /// refreshed on demand. The returned string is the raw token — the client adds
 /// the `Bearer ` prefix. Implementations MUST be cheap to call when cached.
+///
+/// An implementation MUST NOT call back into the same [`Client`](crate::Client)
+/// it authenticates in order to obtain its token: the client's cache mutex is
+/// non-reentrant and is held across this call, so doing so would deadlock.
 pub trait TokenProvider: Send + Sync {
     /// Fetch a currently-valid token.
     fn token(&self) -> BoxFuture<'_, Result<String>>;
