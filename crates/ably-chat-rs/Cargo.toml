@@ -48,6 +48,9 @@ jwt = ["dep:jsonwebtoken"]
 token-issuance = ["dep:ably-auth-openapi"]
 
 [package.metadata.docs.rs]
-# Document the default (rustls) TLS backend + chrono; avoid dragging OpenSSL
-# (native-tls) onto the docs.rs builder via all-features.
-features = ["chrono"]
+# Document the default (rustls) TLS backend + chrono + token-issuance; avoid
+# dragging OpenSSL (native-tls) onto the docs.rs builder via all-features.
+# Safe to include token-issuance here: rustls is a default feature and
+# propagates to the optional ably-auth-openapi dep only weakly
+# (`ably-auth-openapi?/rustls`), so this does not pull in native-tls/OpenSSL.
+features = ["chrono", "token-issuance"]
