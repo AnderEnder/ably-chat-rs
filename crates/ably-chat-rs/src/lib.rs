@@ -59,6 +59,11 @@ pub use types::*;
 mod config;
 pub use config::*;
 
+#[cfg(feature = "capabilities")]
+mod capability;
+#[cfg(feature = "capabilities")]
+pub use capability::{Capability, Operation};
+
 mod client;
 pub use client::{Client, ClientBuilder};
 
