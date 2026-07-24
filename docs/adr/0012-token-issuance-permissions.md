@@ -1,7 +1,11 @@
 # ADR-0012: Token issuance & permission helpers (capabilities, Ably JWT, refresh provider)
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-07-24
+- Accepted: 2026-07-24 — implemented and merged to `main` across four phases
+  (`capabilities`, `jwt`, `Auth::Provider` refresh, `token-issuance`). The pre-1.0
+  `for_room` scoping verification below remains open; it gates stabilization of that
+  helper, not this decision.
 - Deciders: Andrii Radyk
 - Relates to: [ADR-0005](0005-authentication.md) (extends its reserved `TokenProvider` point), [ADR-0001](0001-rest-only-scope.md) (REST-only boundary)
 - Research: [`../research/2026-07-24-ably-chat-auth-permissions.md`](../research/2026-07-24-ably-chat-auth-permissions.md)
