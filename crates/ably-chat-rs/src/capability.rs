@@ -58,6 +58,35 @@ impl Operation {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Capability(std::collections::BTreeMap<String, std::collections::BTreeSet<String>>);
 
+impl Capability {
+    /// An empty capability document.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Grant `ops` on `resource` (a channel-name pattern, e.g. `"room"`,
+    /// `"dms:*"`, `"*"`). Repeated resources merge.
+    pub fn allow(
+        mut self,
+        resource: impl Into<String>,
+        ops: impl IntoIterator<Item = Operation>,
+    ) -> Self {
+        let entry = self.0.entry(resource.into()).or_default();
+        for op in ops {
+            entry.insert(op.as_str().to_owned());
+        }
+        self
+    }
+
+    /// The canonical capability string for a TokenRequest or an
+    /// `x-ably-capability` JWT claim: sorted resource keys, sorted operations,
+    /// no whitespace.
+    pub fn to_capability_string(&self) -> String {
+        // Infallible: the map is String→[String].
+        serde_json::to_string(&self.0).expect("capability map is always serializable")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +102,25 @@ mod tests {
         assert_eq!(Operation::ChannelMetadata.as_str(), "channel-metadata");
         assert_eq!(Operation::PrivilegedHeaders.as_str(), "privileged-headers");
         assert_eq!(Operation::Other("custom".into()).as_str(), "custom");
+    }
+
+    #[test]
+    fn canonical_string_sorts_keys_and_ops_no_whitespace() {
+        let cap = Capability::new()
+            .allow("z-room", [Operation::Subscribe, Operation::Publish])
+            .allow("a-room", [Operation::History]);
+        // Keys sorted (a-room before z-room); ops sorted (publish before subscribe); no spaces.
+        assert_eq!(
+            cap.to_capability_string(),
+            r#"{"a-room":["history"],"z-room":["publish","subscribe"]}"#
+        );
+    }
+
+    #[test]
+    fn allow_merges_repeated_resource() {
+        let cap = Capability::new()
+            .allow("r", [Operation::Publish])
+            .allow("r", [Operation::History]);
+        assert_eq!(cap.to_capability_string(), r#"{"r":["history","publish"]}"#);
     }
 }
