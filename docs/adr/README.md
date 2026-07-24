@@ -19,4 +19,7 @@ immutable once **Accepted**; a later ADR may **supersede** an earlier one.
 | [0011](0011-packaging.md) | Packaging: name, licence, edition, MSRV | Accepted |
 
 Detailed design (code-level) lives in [`../rust-wrapper-design.md`](../rust-wrapper-design.md).
-The normative contract lives in [`../SPEC.md`](../SPEC.md).
+The normative contract lives in [`../SPEC.md`](../SPEC.md). Realtime support is
+planned in a separate repository —
+[ably-realtime-rs](https://github.com/AnderEnder/ably-realtime-rs) — which holds
+its own design, protocol spec, and ADRs.

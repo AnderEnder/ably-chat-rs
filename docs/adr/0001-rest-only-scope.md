@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-07-23
 - Deciders: Andrii Radyk
+- Realtime delivery is planned in a separate repository:
+  [ably-realtime-rs](https://github.com/AnderEnder/ably-realtime-rs)
 
 ## Context
 

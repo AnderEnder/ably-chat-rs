@@ -13,7 +13,11 @@ here lives in the [ADRs](adr/); code-level detail lives in
   versions, reactions send/delete/client-reactions, occupancy).
 - Out of scope (no REST endpoint; realtime transport only): subscribing to live
   messages, presence, typing indicators, room reactions, live reaction
-  summaries. See [ADR-0001](adr/0001-rest-only-scope.md).
+  summaries. See [ADR-0001](adr/0001-rest-only-scope.md). How realtime *would* be
+  delivered — a separate generic core crate consumed behind an opt-in feature —
+  is designed in the separate
+  [ably-realtime-rs](https://github.com/AnderEnder/ably-realtime-rs) repository
+  (its own design doc, protocol spec, and ADRs).
 - There is **no** create-room / delete-room / create-channel / delete-channel
   operation and the crate MUST NOT expose one. Rooms are implicit.
 
