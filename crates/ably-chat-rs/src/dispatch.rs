@@ -312,4 +312,30 @@ mod tests {
         assert_eq!(err.status(), Some(401));
         assert!(err.is_token_error());
     }
+
+    #[tokio::test]
+    async fn static_auth_does_not_retry_on_token_error() {
+        use crate::config::Auth;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/chat/v4/rooms/r/occupancy"))
+            .respond_with(ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"code":40142,"message":"expired","statusCode":401}}"#,
+            ))
+            .expect(1) // exactly one hit: static auth must not retry
+            .mount(&server)
+            .await;
+
+        let client = Client::builder(Auth::api_key("app.k:s"))
+            .host(server.uri())
+            .build();
+        let err = client
+            .inner
+            .send(Method::GET, "/chat/v4/rooms/r/occupancy", &[], None, false)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(401));
+        assert!(err.is_token_error());
+    }
 }
