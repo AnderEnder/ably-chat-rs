@@ -85,6 +85,21 @@ impl Capability {
         // Infallible: the map is String→[String].
         serde_json::to_string(&self.0).expect("capability map is always serializable")
     }
+
+    /// Grant `ops` on a chat room, scoped by **room name**.
+    ///
+    /// Uses the bare room name, which Ably's product model expands to authorize
+    /// both the `/chat/v4` REST API and the `room::$chat` channel. Do **not** pass
+    /// `"{room}::$chat"` here — that authorizes only the realtime channel and would
+    /// `40160` on REST. The explicit product qualifier `[chat]{room}` is available
+    /// via [`Capability::allow`].
+    ///
+    /// NOTE (pre-1.0): the exact resource form is confirmed only to moderate-high
+    /// confidence; verify against a live app before stabilization (see
+    /// `docs/research/2026-07-24-ably-chat-auth-permissions.md` §A2.2).
+    pub fn for_room(self, room: &str, ops: impl IntoIterator<Item = Operation>) -> Self {
+        self.allow(room.to_owned(), ops)
+    }
 }
 
 #[cfg(test)]
@@ -122,5 +137,15 @@ mod tests {
             .allow("r", [Operation::Publish])
             .allow("r", [Operation::History]);
         assert_eq!(cap.to_capability_string(), r#"{"r":["history","publish"]}"#);
+    }
+
+    #[test]
+    fn for_room_scopes_bare_room_name() {
+        // Bare room name (Ably's documented form). NOT "sports::$chat".
+        let cap = Capability::new().for_room("sports", [Operation::Publish, Operation::History]);
+        assert_eq!(
+            cap.to_capability_string(),
+            r#"{"sports":["history","publish"]}"#
+        );
     }
 }
