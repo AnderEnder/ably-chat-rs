@@ -18,6 +18,7 @@ name = "ably_chat"
 
 [dependencies]
 ably-chat-openapi = { version = "0.1.0", path = "../ably-chat-openapi" }
+ably-auth-openapi = { version = "0.1.0", path = "../ably-auth-openapi", default-features = false, optional = true }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -35,12 +36,16 @@ wiremock = "0.6"
 
 [features]
 default = ["rustls", "capabilities", "jwt"]
-native-tls = ["reqwest/native-tls", "ably-chat-openapi/native-tls"]
-rustls = ["reqwest/rustls", "ably-chat-openapi/rustls"]
+native-tls = ["reqwest/native-tls", "ably-chat-openapi/native-tls", "ably-auth-openapi?/native-tls"]
+rustls = ["reqwest/rustls", "ably-chat-openapi/rustls", "ably-auth-openapi?/rustls"]
 chrono = ["dep:chrono"]
 # Permissions/issuance (ADR-0012, SPEC §13). On by default; disable via default-features = false.
 capabilities = []
 jwt = ["dep:jsonwebtoken"]
+# Ergonomic server-side token issuance via the platform requestToken endpoint.
+# Off by default: it links the ably-auth-openapi generated crate and holds
+# your API secret. Enable explicitly: --features token-issuance.
+token-issuance = ["dep:ably-auth-openapi"]
 
 [package.metadata.docs.rs]
 # Document the default (rustls) TLS backend + chrono; avoid dragging OpenSSL
