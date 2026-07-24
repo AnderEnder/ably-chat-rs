@@ -78,6 +78,11 @@ mod jwt;
 #[cfg(feature = "jwt")]
 pub use jwt::{SigningKey, TokenParams, mint_ably_jwt};
 
+#[cfg(feature = "token-issuance")]
+mod token_provider;
+#[cfg(feature = "token-issuance")]
+pub use token_provider::KeyTokenProvider;
+
 mod client;
 pub use client::{Client, ClientBuilder};
 
