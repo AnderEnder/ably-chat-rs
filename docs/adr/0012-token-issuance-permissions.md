@@ -73,7 +73,11 @@ delegated.
    layer resolves the `Authorization` header per request from a cached, provider-supplied
    Bearer credential, and on an HTTP `401` whose Ably error code is in `[40140, 40150)`
    makes **exactly one** re-auth attempt and retries once (spec RSA4b); it never loops.
-   Refresh is single-flighted. Adding this variant makes `Auth` `#[non_exhaustive]`.
+   Refresh is single-flighted — including the 401-triggered *forced* refresh, which
+   dedupes via a staleness token (a caller passes the header it had rejected; if the cache
+   has already moved on, the fresh value is reused instead of minting again). This is a
+   deliberate choice to go *beyond* the Ably spec — see the consequence note below.
+   Adding this variant makes `Auth` `#[non_exhaustive]`.
 
 5. **Model the platform token endpoints in a separate spec + generated crate** *(revised
    2026-07-24; originally "decline")*. The token-issuance/revocation/time endpoints
@@ -119,11 +123,27 @@ delegated.
   bindings (the `requestToken`/`revokeTokens` exchange), not only via the `ably` crate.
   TokenRequest HMAC *signing* remains the caller's responsibility (or use unsigned
   `TokenParams` + Basic auth); an ergonomic wrapper is future work.
-- **Open verification (blocks shipping the `capabilities` `for_room` helper):** the exact
+- **Single-flight refresh is ours, not Ably's — and is load-bearing.** The Ably features
+  spec does **not** require deduplicating concurrent renewals: RSA4b's "a single attempt"
+  is per-request, and a sweep of `ably/specification` finds no concurrency clause in
+  RSA4/RSA8/RSA9/RSA10/RSA16. No official SDK fully dedupes the forced (401-driven) case
+  either — `ably-js` piggybacks only *non-forced* callers (forced ones fan out, "last one
+  wins"); `ably-go` serializes on a mutex but still re-requests per caller; `ably-java` and
+  `ably-python` have no protection. We nevertheless require it (SPEC §13.3) because the
+  naive forced path is worse than redundant: holding the cache mutex across the provider
+  call turns N concurrent 401s into N *sequential* mints, so tail latency grows with
+  concurrency — a latency cliff at every token expiry for the server-side `Arc<Client>`
+  case this ADR targets. Ably also meters token issuance separately (**50 req/s** and 60k/h
+  on Free; 250/s Standard; 500/s Pro), and exceeding it returns **`40115`
+  `account_request_limit_exceeded`**, which sits *outside* the `[40140, 40150)` renewal
+  range — so a large enough burst degrades into failures the retry-once path cannot
+  recover. Deduping removes both failure modes at the cost of ~10 lines.
+- **Open verification (blocks *stabilization* of the `capabilities` `for_room` helper;
+  it ships pre-1.0 with the caveat documented on the helper itself):** the exact
   resource string that authorises both the `::$chat` channel and the `/chat/v4` REST calls
   is confirmed only to moderate-high confidence (the `[chat]` qualifier is documented in a
   0.7-era note). A live test matrix (`[chat]{room}` · bare `{room}` · `{room}::$chat` ·
-  `{room}:*`, checking send/history/occupancy for `40160`) MUST be run first.
+  `{room}:*`, checking send/history/occupancy for `40160`) MUST be run before 1.0.
 
 ## Alternatives considered
 

@@ -231,7 +231,13 @@ live in ADR-0012 and [`research/2026-07-24-ably-chat-auth-permissions.md`](resea
   `Authorization` header per request from a cached provider credential, and on an HTTP
   `401` whose Ably error code is in the range `40140 ≤ code < 40150` MUST make **exactly
   one** re-authentication attempt and retry the request once; it MUST NOT loop, and it
-  MUST single-flight concurrent refreshes. Provider errors MUST surface as `Error`.
+  MUST single-flight concurrent refreshes — *including* the 401-triggered forced refresh,
+  not only cold-cache resolution. Provider errors MUST surface as `Error`.
+  (The single-flight clause is **this project's** requirement, not Ably's: the features spec
+  has no concurrency clause and no official SDK fully dedupes the forced case. It is
+  required here because the naive forced path serializes N concurrent 401s into N sequential
+  mints, and because token issuance is separately rate-limited — `40115`, outside the
+  renewal range. Rationale in [ADR-0012](adr/0012-token-issuance-permissions.md).)
 - Clock-offset / TokenRequest-timestamp handling is **not** required here (it applies only
   to local TokenRequest signing, which is out of scope — §13.4).
 
