@@ -45,6 +45,7 @@ jobs:
       - name: Feature matrix (ergonomic crate)
         run: |
           cargo check -p ably-chat-rs --no-default-features --features native-tls
+          cargo check -p ably-chat-rs --no-default-features --features rustls,token-issuance
           cargo check -p ably-chat-rs --all-features
 
   msrv:
