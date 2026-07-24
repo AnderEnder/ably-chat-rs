@@ -149,7 +149,7 @@ mod tests {
         assert!(KeyTokenProvider::new("no-colon").is_err());
     }
 
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::{body_partial_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
@@ -157,6 +157,9 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/keys/app.key/requestToken"))
+            // The body is the unsigned `TokenParams` shape and `ttl` is in
+            // MILLISECONDS (1h -> 3_600_000), which is what Ably expects.
+            .and(body_partial_json(serde_json::json!({"ttl": 3_600_000})))
             .respond_with(ResponseTemplate::new(200).set_body_raw(
                 r#"{"token":"tok-XYZ","keyName":"app.key"}"#,
                 "application/json",
@@ -165,7 +168,8 @@ mod tests {
             .await;
         let p = KeyTokenProvider::new("app.key:secret")
             .unwrap()
-            .host(server.uri());
+            .host(server.uri())
+            .ttl(Duration::from_secs(3600));
         assert_eq!(p.token().await.unwrap(), "tok-XYZ");
     }
 
@@ -184,5 +188,7 @@ mod tests {
             .host(server.uri());
         let err = p.token().await.unwrap_err();
         assert_eq!(err.status(), Some(401));
+        // Status and body are mapped independently; pin the body half too.
+        assert_eq!(err.info().unwrap().code, 40100);
     }
 }
