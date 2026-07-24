@@ -85,6 +85,7 @@ impl crate::client::Inner {
     ) -> Result<RawResponse> {
         let eligible = Self::retry_eligible(&method, has_idem);
         let mut attempt = 0;
+        let mut auth_refreshed = false;
         loop {
             let auth = self.auth_header(false).await?;
             let mut req = self
@@ -120,7 +121,18 @@ impl crate::client::Inner {
                             body: bytes,
                         });
                     }
-                    return Err(Error::from_api_body(status, &bytes));
+                    let err = Error::from_api_body(status, &bytes);
+                    // Provider-backed token error: refresh once and retry the
+                    // request once (spec RSA4b — exactly one extra attempt).
+                    if !auth_refreshed
+                        && err.is_token_error()
+                        && matches!(&self.auth, crate::client::AuthState::Provider { .. })
+                    {
+                        auth_refreshed = true;
+                        self.auth_header(true).await?; // force refresh; propagate provider errors
+                        continue;
+                    }
+                    return Err(err);
                 }
                 Err(e) => {
                     if e.is_timeout() && eligible && attempt < self.max_retries {
@@ -216,5 +228,86 @@ mod tests {
         let occ: crate::types::Occupancy = serde_json::from_slice(&r.body).unwrap();
         assert_eq!(occ.connections, 3);
         assert_eq!(occ.presence_members, 2);
+    }
+
+    #[tokio::test]
+    async fn provider_refreshes_once_on_token_error_then_succeeds() {
+        use crate::config::{Auth, TokenProvider};
+        use futures::future::BoxFuture;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let server = MockServer::start().await;
+        // First call (Bearer stale) → 401 token error; second (Bearer fresh) → 200.
+        Mock::given(method("GET"))
+            .and(path("/chat/v4/rooms/r/occupancy"))
+            .and(header("authorization", "Bearer stale"))
+            .respond_with(ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"code":40142,"message":"expired","statusCode":401}}"#,
+            ))
+            .up_to_n_times(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/chat/v4/rooms/r/occupancy"))
+            .and(header("authorization", "Bearer fresh"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string(r#"{"connections":1,"presenceMembers":0}"#),
+            )
+            .mount(&server)
+            .await;
+
+        struct Rotating(Arc<AtomicUsize>);
+        impl TokenProvider for Rotating {
+            fn token(&self) -> BoxFuture<'_, crate::error::Result<String>> {
+                let n = self.0.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async move { Ok(if n == 0 { "stale" } else { "fresh" }.to_string()) })
+            }
+        }
+        let client = Client::builder(Auth::provider(Arc::new(Rotating(Arc::new(
+            AtomicUsize::new(0),
+        )))))
+        .host(server.uri())
+        .build();
+        let r = client
+            .inner
+            .send(Method::GET, "/chat/v4/rooms/r/occupancy", &[], None, false)
+            .await;
+        assert!(r.is_ok(), "should succeed after one refresh: {r:?}");
+    }
+
+    #[tokio::test]
+    async fn provider_does_not_loop_on_persistent_token_error() {
+        use crate::config::{Auth, TokenProvider};
+        use futures::future::BoxFuture;
+        use std::sync::Arc;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/chat/v4/rooms/r/occupancy"))
+            .respond_with(ResponseTemplate::new(401).set_body_string(
+                r#"{"error":{"code":40142,"message":"expired","statusCode":401}}"#,
+            ))
+            .expect(2) // original + exactly one retry
+            .mount(&server)
+            .await;
+
+        struct Always;
+        impl TokenProvider for Always {
+            fn token(&self) -> BoxFuture<'_, crate::error::Result<String>> {
+                Box::pin(async { Ok("t".to_string()) })
+            }
+        }
+        let client = Client::builder(Auth::provider(Arc::new(Always)))
+            .host(server.uri())
+            .build();
+        let err = client
+            .inner
+            .send(Method::GET, "/chat/v4/rooms/r/occupancy", &[], None, false)
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(401));
+        assert!(err.is_token_error());
     }
 }
