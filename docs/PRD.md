@@ -137,8 +137,12 @@ code are pinned here (they drift); type shapes are described in prose.
   the generated crate is re-exported as `ably_chat::raw`, an unstable escape
   hatch; regeneration replaces that crate wholesale.
 - **Authentication** ([ADR-0005](adr/0005-authentication.md)): a credentials enum
-  (`ApiKey` | `Token`) on the client builder; static credentials only in 0.x; a
-  `TokenProvider` extension point is reserved for later.
+  (`ApiKey` | `Token`) on the client builder; static credentials in 0.x.
+- **Token issuance & permissions** ([ADR-0012](adr/0012-token-issuance-permissions.md)):
+  extends the reserved `TokenProvider` point into `Auth::Provider` (auto-refresh with a
+  single retry on token-error 401s), plus two default-on, server-side helpers — a typed
+  `Capability` model and an Ably JWT minter. Native Ably Token minting (`requestToken`) is
+  deliberately out of scope; defer to the official `ably` crate or a caller auth server.
 - **Retry safety** ([ADR-0006](adr/0006-retry-policy.md)): a request is retried
   only if it is `GET`/`DELETE` or carries an idempotency key; `Retry-After` is
   honoured.

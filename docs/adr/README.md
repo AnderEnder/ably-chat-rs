@@ -17,6 +17,7 @@ immutable once **Accepted**; a later ADR may **supersede** an earlier one.
 | [0009](0009-pagination-streaming.md) | Pagination as `Page<T>` + `Stream` over Link headers | Accepted |
 | [0010](0010-ergonomic-surface.md) | Handle-chain surface, `IntoFuture` builders | Accepted |
 | [0011](0011-packaging.md) | Packaging: name, licence, edition, MSRV | Accepted |
+| [0012](0012-token-issuance-permissions.md) | Token issuance & permission helpers (capabilities, Ably JWT, refresh provider) | Proposed |
 
 Detailed design (code-level) lives in [`../rust-wrapper-design.md`](../rust-wrapper-design.md).
 The normative contract lives in [`../SPEC.md`](../SPEC.md). Realtime support is

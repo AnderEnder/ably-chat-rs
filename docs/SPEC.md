@@ -33,8 +33,9 @@ here lives in the [ADRs](adr/); code-level detail lives in
 
 - **Base URL:** `https://rest.ably.io` by default; the host MUST be configurable.
 - **Version:** every request MUST send `X-Ably-Version: 4`.
-- **Auth:** HTTP Basic (API key `keyName:keySecret`) or Bearer (Ably Token/JWT).
-  See [ADR-0005](adr/0005-authentication.md).
+- **Auth:** HTTP Basic (API key `keyName:keySecret`) or Bearer (Ably Token/JWT),
+  or a caller-supplied refreshing `TokenProvider`. See
+  [ADR-0005](adr/0005-authentication.md) and [ADR-0012](adr/0012-token-issuance-permissions.md).
 - **Timestamps:** integer milliseconds since the Unix epoch (`i64`), never
   RFC 3339 strings. See [ADR-0007](adr/0007-domain-modeling.md).
 - **Pagination:** `getMessages` and `getMessageVersions` return a JSON array body
@@ -60,8 +61,10 @@ Two-crate workspace ([ADR-0002](adr/0002-workspace-topology.md)):
 - A `Client` MUST be constructed via a builder. Required input: credentials
   (API key **or** token). Optional: host, request timeout, a caller-supplied
   `reqwest::Client`.
-- Credentials MUST be modelled as an enum (`ApiKey` | `Token`). Static only in
-  0.x; no auto-refresh.
+- Credentials MUST be modelled as an enum. `ApiKey` (Basic) and `Token` (Bearer)
+  are static. A third `Provider` variant (a caller-supplied refreshing
+  `TokenProvider`) MAY be supplied for auto-refresh ([ADR-0012](adr/0012-token-issuance-permissions.md),
+  §13.3); when it lands the `Auth` enum MUST become `#[non_exhaustive]`.
 - `Client` MUST be cheap to `Clone` (`Arc`-backed) and `Send + Sync`.
 - `Client`'s `Debug` MUST redact credentials.
 - TLS backend selection MUST be via additive Cargo features
@@ -162,6 +165,11 @@ state in `Arc`. No global mutable state.
 - All features MUST be additive.
 - TLS: `rustls` (default) | `native-tls`.
 - Datetime: optional `chrono`.
+- Permissions/issuance ([ADR-0012](adr/0012-token-issuance-permissions.md), §13):
+  `capabilities` (typed capability model) and `jwt` (Ably JWT minter; server-side only)
+  are **on by default**; `token-issuance` (the `KeyTokenProvider` `requestToken` client,
+  §13.4; adds the `ably-auth-openapi` dependency) is **off by default**. Disable the
+  defaults via `default-features = false`.
 - The crate SHOULD be runtime-agnostic (no hard tokio dependency beyond what
   `reqwest` requires); tests MAY use tokio.
 
@@ -172,3 +180,72 @@ state in `Arc`. No global mutable state.
   generated crate.
 - MSRV `1.85`, edition `2024`, dual `MIT OR Apache-2.0`
   ([ADR-0011](adr/0011-packaging.md)).
+
+## 13. Permissions & token issuance ([ADR-0012](adr/0012-token-issuance-permissions.md))
+
+Additive and oriented at the **server-side** token-issuance use case. The `capabilities`
+and `jwt` features are **on by default** (disable via `default-features = false`).
+Rationale and the boundary decision (why native Ably Token minting is *out* of scope)
+live in ADR-0012 and [`research/2026-07-24-ably-chat-auth-permissions.md`](research/2026-07-24-ably-chat-auth-permissions.md).
+
+### 13.1 Capabilities (feature `capabilities`, on by default)
+
+- An `Operation` enum MUST cover the Ably capability operations (`subscribe`,
+  `publish`, `presence`, `object-subscribe`, `object-publish`, `annotation-subscribe`,
+  `annotation-publish`, `message-update-own`, `message-update-any`, `message-delete-own`,
+  `message-delete-any`, `history`, `stats`, `push-subscribe`, `push-admin`,
+  `channel-metadata`, `privileged-headers`) and, per [ADR-0007](adr/0007-domain-modeling.md),
+  carry an `Other` fallback so an unknown wire value does not fail deserialization.
+- A `Capability` value type MUST model a map from **resource pattern** to a **set of
+  operations**. It MUST serialize to Ably's **canonical form** — resource keys sorted,
+  operations sorted, no whitespace — for use in a TokenRequest or an `x-ably-capability`
+  claim, and SHOULD also expose a **native JSON object** rendering for the Ably Control
+  API key endpoints. (A Rust `BTreeSet<Operation>` sorts by discriminant, not by string;
+  the canonical serializer MUST sort by the serialized operation string.)
+- A `for_room(room, ops)` helper MUST scope to the **room name** — bare `"{room}"` or the
+  product qualifier `"[chat]{room}"` — and MUST NOT scope to `"{room}::$chat"` (which
+  authorizes only the realtime channel and would `40160` on the REST calls this crate
+  makes). *This scoping MUST be confirmed against a live Ably app before stabilization*
+  (test matrix in the research memo §A2.2).
+- The type mints nothing and MUST NOT require any secret. Effective token capability is
+  the intersection of the requested capability and the issuing key's own (informative).
+
+### 13.2 Ably JWT minting (feature `jwt`, on by default, server-side only)
+
+- A minting function MUST produce an HS256 JWT with header `kid` = the API key name
+  (`appId.keyId`) and claims `x-ably-capability` (the capability JSON string; **no**
+  canonicalization is required for a JWT), optional `x-ably-clientId`, `iat`, `exp`, and
+  optional `x-ably-revocation-key`. It MUST NOT perform any network call.
+- The API secret MUST be taken as a dedicated newtype whose `Debug` redacts it, and the
+  function MUST be documented as **server-side only** (the secret must never ship to a
+  client). Issued JWT `ttl` SHOULD respect Ably's limits (default 60 min; ≤ 1 h if the
+  key has revocable tokens enabled).
+
+### 13.3 Token refresh (`Auth::Provider`)
+
+- The `Auth` enum MUST gain a `Provider(Arc<dyn TokenProvider>)` variant and MUST become
+  `#[non_exhaustive]`.
+- `TokenProvider` MUST be an object-safe `Send + Sync` trait yielding a currently-valid
+  Bearer credential (Ably Token string or Ably JWT) asynchronously.
+- The dispatch layer ([ADR-0003](adr/0003-own-the-call-layer.md)) MUST resolve the
+  `Authorization` header per request from a cached provider credential, and on an HTTP
+  `401` whose Ably error code is in the range `40140 ≤ code < 40150` MUST make **exactly
+  one** re-authentication attempt and retry the request once; it MUST NOT loop, and it
+  MUST single-flight concurrent refreshes. Provider errors MUST surface as `Error`.
+- Clock-offset / TokenRequest-timestamp handling is **not** required here (it applies only
+  to local TokenRequest signing, which is out of scope — §13.4).
+
+### 13.4 Native token issuance (feature `token-issuance`, server-side only)
+
+- The platform token endpoints (`POST /keys/{keyName}/requestToken`, `POST
+  /keys/{keyName}/revokeTokens`, `GET /time`) are modelled in a separate OpenAPI document,
+  [`../openapi/ably-auth-rest.yaml`](../openapi/ably-auth-rest.yaml), and generated into
+  the `ably-auth-openapi` crate ([ADR-0012](adr/0012-token-issuance-permissions.md) item 5).
+- Behind an **off-by-default** `token-issuance` feature, the crate MAY provide a
+  `KeyTokenProvider` — a [`TokenProvider`](#133-token-refresh-authprovider) that mints Ably
+  Tokens by calling `requestToken` with an **unsigned `TokenParams` body + HTTP Basic auth**.
+  It is **server-side only** (holds the API secret) and performs no TokenRequest HMAC signing.
+- The crate MUST NOT implement **TokenRequest HMAC signing** (the fragile canonical-string
+  path); a caller needing a *signed* request produces it themselves. The crate MUST NOT take
+  a dependency on the `ably` crate while a dependency-graph conflict exists
+  ([ADR-0012](adr/0012-token-issuance-permissions.md)).
