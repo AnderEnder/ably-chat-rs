@@ -1,18 +1,34 @@
 //! Static credentials for the client (ADR-0005).
 
+use std::sync::Arc;
+
 use base64::{Engine, engine::general_purpose::STANDARD};
+use futures::future::BoxFuture;
+
+use crate::error::Result;
+
+/// Supplies a currently-valid Bearer credential (Ably Token string or Ably JWT),
+/// refreshed on demand. The returned string is the raw token — the client adds
+/// the `Bearer ` prefix. Implementations MUST be cheap to call when cached.
+pub trait TokenProvider: Send + Sync {
+    /// Fetch a currently-valid token.
+    fn token(&self) -> BoxFuture<'_, Result<String>>;
+}
 
 /// Static credentials supplied to the client.
 ///
 /// Ably accepts HTTP **Basic** auth with an API key (`keyName:keySecret`) or
-/// **Bearer** auth with an Ably Token/JWT. Static only in 0.x — no automatic
-/// token refresh (ADR-0005).
+/// **Bearer** auth with an Ably Token/JWT. `Auth::Provider` refreshes on
+/// demand via a caller-supplied [`TokenProvider`] (ADR-0005).
 #[derive(Clone)]
+#[non_exhaustive]
 pub enum Auth {
     /// An Ably API key, `keyName:keySecret`, sent as HTTP Basic.
     ApiKey(String),
     /// An Ably Token/JWT, sent as a Bearer token.
     Token(String),
+    /// A caller-supplied provider that yields (and refreshes) Bearer credentials.
+    Provider(Arc<dyn TokenProvider>),
 }
 
 impl Auth {
@@ -26,11 +42,19 @@ impl Auth {
         Auth::Token(token.into())
     }
 
+    /// Constructs credentials backed by a refreshing [`TokenProvider`].
+    pub fn provider(p: Arc<dyn TokenProvider>) -> Self {
+        Auth::Provider(p)
+    }
+
     /// Renders the value for the `Authorization` header.
     pub(crate) fn header_value(&self) -> String {
         match self {
             Auth::ApiKey(k) => format!("Basic {}", STANDARD.encode(k.as_bytes())),
             Auth::Token(t) => format!("Bearer {t}"),
+            Auth::Provider(_) => unreachable!(
+                "Auth::Provider carries no static header; see AuthState::Provider in client.rs"
+            ),
         }
     }
 }
@@ -40,13 +64,10 @@ impl std::fmt::Debug for Auth {
         match self {
             Auth::ApiKey(_) => f.write_str("Auth::ApiKey(<redacted>)"),
             Auth::Token(_) => f.write_str("Auth::Token(<redacted>)"),
+            Auth::Provider(_) => f.write_str("Auth::Provider(<dyn TokenProvider>)"),
         }
     }
 }
-
-// TODO(ADR-0005): reserve `Auth::Provider(Arc<dyn TokenProvider>)` here later
-// for token auto-refresh. `#[non_exhaustive]` is intentionally NOT added yet so
-// callers can match exhaustively in 0.x; revisit before adding the variant.
 
 #[cfg(test)]
 mod tests {
@@ -69,5 +90,22 @@ mod tests {
         assert!(!dbg.contains("secret"));
         let dbg = format!("{:?}", Auth::token("tok123"));
         assert!(!dbg.contains("tok123"));
+    }
+
+    #[test]
+    fn provider_debug_redacts() {
+        use futures::future::BoxFuture;
+        use std::sync::Arc;
+
+        struct P;
+        impl crate::config::TokenProvider for P {
+            fn token(&self) -> BoxFuture<'_, crate::error::Result<String>> {
+                Box::pin(async { Ok("jwt-abc".to_string()) })
+            }
+        }
+        let a = Auth::provider(Arc::new(P));
+        let dbg = format!("{a:?}");
+        assert!(dbg.contains("Provider"));
+        assert!(!dbg.contains("jwt-abc"));
     }
 }
