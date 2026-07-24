@@ -27,16 +27,20 @@ base64 = "0.22"
 bytes = "1"
 urlencoding = "2"
 chrono = { version = "0.4", optional = true, default-features = false, features = ["std"] }
+jsonwebtoken = { version = "9", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 wiremock = "0.6"
 
 [features]
-default = ["rustls"]
+default = ["rustls", "capabilities", "jwt"]
 native-tls = ["reqwest/native-tls", "ably-chat-openapi/native-tls"]
 rustls = ["reqwest/rustls", "ably-chat-openapi/rustls"]
 chrono = ["dep:chrono"]
+# Permissions/issuance (ADR-0012, SPEC §13). On by default; disable via default-features = false.
+capabilities = []
+jwt = ["dep:jsonwebtoken"]
 
 [package.metadata.docs.rs]
 # Document the default (rustls) TLS backend + chrono; avoid dragging OpenSSL
