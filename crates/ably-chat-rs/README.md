@@ -106,7 +106,7 @@ curl -sS "https://rest.ably.io/chat/v4/rooms/my-room/occupancy" \
 
 ## Minimum supported Rust version
 
-MSRV is **1.85** (edition 2024).
+MSRV is **1.88** (edition 2024).
 
 ## License
 

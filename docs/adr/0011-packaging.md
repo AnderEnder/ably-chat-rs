@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-07-23
 - Deciders: Andrii Radyk
+- Amended 2026-07-24 by [ADR-0012](0012-token-issuance-permissions.md): **MSRV raised to
+  1.88** (`jsonwebtoken` → `simple_asn1` → `time 0.3.54` requires rustc 1.88), and a third
+  published member crate, `ably-auth-openapi`, was added. The decision text below is
+  historical (records the original `1.85` / two-crate state).
 
 ## Context
 

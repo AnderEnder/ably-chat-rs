@@ -110,6 +110,11 @@ delegated.
   the mitigations are the `ApiSecret` redacting newtype and prominent "server-side only"
   documentation, not the feature gate. A minimal-footprint consumer opts out with
   `default-features = false`. `capabilities` default-on has no secret and negligible weight.
+- **MSRV raised to 1.88** (from 1.85): `jsonwebtoken 9` → `simple_asn1` → `time 0.3.54`
+  requires rustc 1.88, so keeping `jwt` default-on forces the bump. Applied to the workspace
+  `rust-version`, the CI `msrv` job, SPEC §12, and the crate READMEs; supersedes ADR-0011's
+  MSRV clause. (Alternative considered: hand-roll HS256 with `hmac`/`sha2` to keep 1.85 —
+  rejected in favour of the well-tested `jsonwebtoken`.)
 - Native Ably Token issuance is now reachable in-repo via the generated `ably-auth-openapi`
   bindings (the `requestToken`/`revokeTokens` exchange), not only via the `ably` crate.
   TokenRequest HMAC *signing* remains the caller's responsibility (or use unsigned

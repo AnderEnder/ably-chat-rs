@@ -48,13 +48,13 @@ jobs:
           cargo check -p ably-chat-rs --all-features
 
   msrv:
-    name: MSRV 1.85
+    name: MSRV 1.88
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.85.0"
+          toolchain: "1.88.0"
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv

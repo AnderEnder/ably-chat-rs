@@ -178,7 +178,7 @@ state in `Arc`. No global mutable state.
 - Crate starts at `0.x`; breaking changes bump the minor.
 - `ably_chat::raw` is explicitly outside the stability story and tracks the
   generated crate.
-- MSRV `1.85`, edition `2024`, dual `MIT OR Apache-2.0`
+- MSRV `1.88`, edition `2024`, dual `MIT OR Apache-2.0`
   ([ADR-0011](adr/0011-packaging.md)).
 
 ## 13. Permissions & token issuance ([ADR-0012](adr/0012-token-issuance-permissions.md))

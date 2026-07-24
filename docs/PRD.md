@@ -168,7 +168,7 @@ code are pinned here (they drift); type shapes are described in prose.
   delete-message operation is `POST …/messages/{serial}/delete`, not HTTP
   `DELETE`.
 - **Packaging** ([ADR-0011](adr/0011-packaging.md)): both crates unofficial, dual
-  `MIT OR Apache-2.0`, edition 2024, MSRV 1.85, starting at 0.x; published in
+  `MIT OR Apache-2.0`, edition 2024, MSRV 1.88, starting at 0.x; published in
   dependency order (`ably-chat-openapi` then `ably-chat-rs`).
 
 ## Testing Decisions
