@@ -1,28 +1,45 @@
-# Release pipeline — adapted from work/sendgrid's release.yml.
+# Release pipeline — publishes the workspace to crates.io on a SemVer tag.
 #
-# This is a LIBRARY workspace, so — unlike the sendgrid reference — there are NO
-# binary artifacts: no cross-compiled tarballs, no musl Docker builds, no per-OS
-# jobs, no GitHub Release upload. Releasing simply publishes the crates to
-# crates.io. (Per project constraint we build only on Linux + macOS natively;
-# publishing is a source upload and runs once on ubuntu.)
+# This is a LIBRARY workspace, so there are NO binary artifacts: no
+# cross-compiled tarballs, no per-OS jobs, no GitHub Release object. Releasing
+# simply publishes the crates to crates.io, which is a source upload and so runs
+# once on ubuntu.
 #
 # Fires on a SemVer tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
 #
-# Prerequisites / gotchas:
-#   - `cargo publish` ships the version in Cargo.toml, NOT the tag. Bump
-#     `version` in [workspace.package] (and run `cargo build` to refresh
-#     Cargo.lock) BEFORE tagging, or you republish the old version.
-#   - Requires repo secret `CARGO_TOKEN` (crates.io API token).
+# AUTHENTICATION — crates.io Trusted Publishing (OIDC), no stored token.
+# The job mints a GitHub OIDC identity token (`id-token: write`) and exchanges it
+# for a short-lived crates.io token via rust-lang/crates-io-auth-action, whose
+# post step revokes that token when the job finishes. There is deliberately no
+# `CARGO_TOKEN` repo secret: nothing long-lived to leak, rotate, or scope wrong.
+#
+# Each crate needs a trusted publisher registered once on crates.io
+# (Settings -> Trusted Publishing) matching EXACTLY:
+#   owner: AnderEnder   repository: ably-chat-rs
+#   workflow: release.yml   environment: (blank)
+# A mismatch in any field surfaces as an opaque OIDC rejection, not a hint.
+#
+# Gotchas:
+#   - crates.io has no "pending publisher" (unlike PyPI): a crate must already
+#     have a published version before a trusted publisher can be registered, so
+#     the FIRST EVER release of a new crate must be published manually. That is
+#     one-time bootstrap per crate name, not per version.
+#   - `cargo publish` ships the version in Cargo.toml, NOT the tag. The
+#     version-guard step below fails the run on a mismatch rather than silently
+#     republishing the old version.
 #   - `cargo publish --workspace` publishes in dependency order: the generated
 #     `ably-chat-openapi` and `ably-auth-openapi` first, then `ably-chat-rs`.
 #     Intra-workspace deps in `ably-chat-rs` carry an explicit `version` req —
 #     bump those alongside [workspace.package], or the published crate depends
 #     on the PREVIOUS bindings release.
+#   - Cargo does not skip already-published versions (only `publish = false`),
+#     so a run that publishes some crates and then fails cannot just be re-run;
+#     bump to the next patch version for the stragglers.
 #   - No `|| true`: a re-tag of an already-published version SHOULD fail loudly.
-#     Bump the version before tagging again.
 
 name: Release
 
+# Least privilege at the top level; the publish job opts into `id-token: write`.
 permissions:
   contents: read
 
@@ -38,9 +55,38 @@ jobs:
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token for crates.io Trusted Publishing
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      # Guards the documented footgun: the tag is just a trigger, cargo ships
+      # whatever Cargo.toml says. Every workspace crate inherits
+      # [workspace.package] version, so all of them must equal the tag.
+      - name: Tag must match the crate versions
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          mismatched=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r --arg v "$tag" '.packages[] | select(.version != $v) | "  \(.name) is \(.version)"')
+          if [ -n "$mismatched" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} implies version ${tag}, but:"
+            echo "$mismatched"
+            echo "Bump [workspace.package] version, then re-tag."
+            exit 1
+          fi
+          echo "All workspace crates are at ${tag}."
+
+      - name: Authenticate to crates.io via Trusted Publishing
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      # Passed by env rather than `--token` so the short-lived token never
+      # appears in a command line.
       - name: Publish workspace to crates.io
-        run: cargo publish --workspace --token ${{ secrets.CARGO_TOKEN }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --workspace
